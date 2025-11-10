@@ -1,0 +1,407 @@
+// src/app/(dashboard)/appointments/[id]/page.tsx
+'use client'
+
+import React, { useEffect, useState } from 'react'
+import { useRouter, useParams } from 'next/navigation'
+import axios from '@/lib/axios'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogTrigger,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
+import moment from 'moment'
+import { TreatmentStageForm } from '@/components/treatment-stages/treatment-stage-form'
+import { motion } from 'framer-motion'
+import { Appointment, Patient, User, TreatmentStage, Service, Department } from '@/types/api'
+import { useUserPermissions } from '@/hooks/usePermissions'
+import { useQuery } from '@tanstack/react-query'
+import { CheckCircle2, XCircle, Pencil } from 'lucide-react'
+import { AppointmentForm } from '@/components/appointments/appointment-form'
+import { AppointmentActivities } from '@/components/appointments/appointment-activities'
+
+moment.locale('ar')
+
+// Helper function to extract ID from patient/doctor (string or object)
+const extractId = (value: string | Patient | User | null | undefined): string => {
+  if (!value) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as { _id?: string; id?: string }
+    return obj._id || obj.id || ''
+  }
+  return ''
+}
+
+export default function AppointmentDetailPage() {
+  const router = useRouter()
+  const params = useParams()
+  const appointmentId = params.id
+  const { canAddTreatmentStageFromAppointment, canManageAppointments, canViewAppointmentActivities } = useUserPermissions()
+
+  const [appointment, setAppointment] = useState<Appointment | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [openAddStage, setOpenAddStage] = useState(false)
+  const [openEditForm, setOpenEditForm] = useState(false)
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [doctors, setDoctors] = useState<User[]>([])
+  const [services, setServices] = useState<Service[]>([])
+  const [departments, setDepartments] = useState<Department[]>([])
+
+  // Fetch treatment stages for this appointment
+  const { data: treatmentStagesData, refetch: refetchStages } = useQuery({
+    queryKey: ['treatment-stages', 'appointment', appointmentId],
+    queryFn: async () => {
+      const { data } = await axios.get(`/treatment-stages/appointment/${appointmentId}`)
+      return data
+    },
+    enabled: !!appointmentId,
+    select: (data) => {
+      // Return stages from API response
+      return (data?.data || []) as TreatmentStage[]
+    },
+  })
+
+  const treatmentStages = treatmentStagesData || []
+
+  useEffect(() => {
+    if (!appointmentId) return
+
+    setLoading(true)
+    setError(null)
+
+    axios
+      .get(`/appointments/${appointmentId}`)
+      .then((res) => {
+        // The API returns { success: true, data: <appointment> }
+        const appointmentData = res.data?.data || res.data
+        setAppointment(appointmentData)
+      })
+      .catch((err) => {
+        console.error('Error fetching appointment:', err)
+        const errorMessage = err.response?.data?.error || err.response?.data?.message || 'تعذر تحميل تفاصيل الموعد.'
+        setError(errorMessage)
+      })
+      .finally(() => {
+        setLoading(false)
+      })
+  }, [appointmentId])
+
+  // Fetch patients, doctors, services, and departments for the form
+  useEffect(() => {
+    async function fetchFormData() {
+      try {
+        const [patientsRes, doctorsRes, servicesRes, departmentsRes] = await Promise.all([
+          axios.get('/patients'),
+          axios.get('/user-roles/doctors'),
+          axios.get('/services'),
+          axios.get('/departments'),
+        ])
+
+        setPatients(patientsRes.data?.data || patientsRes.data || [])
+        setDoctors(doctorsRes.data?.data || doctorsRes.data || [])
+        setServices(servicesRes.data?.data || servicesRes.data || [])
+        setDepartments(departmentsRes.data?.data || departmentsRes.data || [])
+      } catch (error) {
+        console.error('Error fetching form data:', error)
+      }
+    }
+
+    if (openEditForm) {
+      fetchFormData()
+    }
+  }, [openEditForm])
+
+  if (loading) {
+    return (
+      <div className='flex justify-center items-center h-screen'>
+        <div className='text-gray-500 text-center'>
+          جاري تحميل تفاصيل الموعد...
+        </div>
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className='flex justify-center items-center h-screen'>
+        <div className='text-red-500 text-center'>{error}</div>
+      </div>
+    )
+  }
+
+  if (!appointment) {
+    return (
+      <div className='flex justify-center items-center h-screen'>
+        <div className='text-gray-500 text-center'>
+          لم يتم العثور على الموعد.
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div
+      dir='rtl'
+      className='min-h-screen bg-gray-50 py-8 px-4 md:px-8 lg:px-16'
+    >
+      {/* Container for animations */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5 }}
+        className='max-w-3xl mx-auto space-y-6'
+      >
+        {/* أزرار الإجراءات في الأعلى */}
+        <div className='flex justify-end gap-2'>
+          {canManageAppointments && (
+            <Dialog open={openEditForm} onOpenChange={setOpenEditForm}>
+              <DialogTrigger asChild>
+                <Button variant='outline' className='flex items-center gap-2'>
+                  <Pencil className='w-4 h-4' />
+                  تعديل الموعد
+                </Button>
+              </DialogTrigger>
+              <DialogContent className='max-w-xl' dir='rtl'>
+                <DialogHeader>
+                  <DialogTitle>تعديل الموعد</DialogTitle>
+                  <DialogDescription>
+                    قم بتعديل بيانات الموعد
+                  </DialogDescription>
+                </DialogHeader>
+                {appointment && (
+                  <AppointmentForm
+                    patients={patients}
+                    doctors={doctors}
+                    services={services}
+                    departments={departments}
+                    initialData={appointment}
+                    onSuccess={() => {
+                      setOpenEditForm(false)
+                      // Reload appointment data
+                      axios
+                        .get(`/appointments/${appointmentId}`)
+                        .then((res) => {
+                          const appointmentData = res.data?.data || res.data
+                          setAppointment(appointmentData)
+                        })
+                        .catch((err) => {
+                          console.error('Error fetching appointment:', err)
+                        })
+                    }}
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
+          )}
+          {canAddTreatmentStageFromAppointment && (
+            <Dialog open={openAddStage} onOpenChange={setOpenAddStage}>
+              <DialogTrigger asChild>
+                <Button className='bg-green-500 hover:bg-green-600 text-white'>
+                  إضافة مرحلة علاج
+                </Button>
+              </DialogTrigger>
+            <DialogContent className='max-w-md' dir='rtl'>
+              <DialogHeader>
+                <DialogTitle>إضافة مرحلة علاج</DialogTitle>
+                <DialogDescription>
+                  أضف مرحلة علاجية جديدة للموعد
+                </DialogDescription>
+              </DialogHeader>
+              <TreatmentStageForm
+                appointmentId={appointment._id}
+                patientId={extractId(appointment.patient)}
+                doctorId={extractId(appointment.doctor)}
+                onSuccess={() => {
+                  setOpenAddStage(false)
+                  refetchStages()
+                }}
+              />
+            </DialogContent>
+          </Dialog>
+          )}
+        </div>
+
+        {/* بطاقة تفاصيل الموعد */}
+        <Card className='bg-white shadow-lg rounded-2xl overflow-hidden'>
+          <CardContent className='p-6 space-y-4'>
+            <motion.h1
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.4 }}
+              className='text-2xl font-bold text-gray-800 text-right'
+            >
+              تفاصيل الموعد
+            </motion.h1>
+
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: 0.2, duration: 0.5 }}
+              className='grid grid-cols-1 gap-4 text-right md:grid-cols-2'
+            >
+              <div className='space-y-2'>
+                <p>
+                  <span className='font-semibold'>نوع الموعد:</span>{' '}
+                  <span className='text-gray-700'>
+                    {appointment.type || '-'}
+                  </span>
+                </p>
+                <p>
+                  <span className='font-semibold'>المريض:</span>{' '}
+                  <span className='text-gray-700'>
+                    {typeof appointment.patient === 'object' && appointment.patient !== null
+                      ? appointment.patient.fullName
+                      : '-'}
+                  </span>
+                </p>
+                <p>
+                  <span className='font-semibold'>الطبيب:</span>{' '}
+                  <span className='text-gray-700'>
+                    {typeof appointment.doctor === 'object' && appointment.doctor !== null
+                      ? appointment.doctor.name
+                      : '-'}
+                  </span>
+                </p>
+                <p>
+                  <span className='font-semibold'>الخدمة:</span>{' '}
+                  <span className='text-gray-700'>
+                    {typeof appointment.service === 'object' && appointment.service !== null
+                      ? appointment.service.name
+                      : '-'}
+                  </span>
+                </p>
+                <p>
+                  <span className='font-semibold'>القسم:</span>{' '}
+                  <span className='text-gray-700'>
+                    {typeof appointment.departmentId === 'object' && appointment.departmentId !== null
+                      ? appointment.departmentId.name
+                      : '-'}
+                  </span>
+                </p>
+              </div>
+
+              <div className='space-y-2'>
+                <p>
+                  <span className='font-semibold'>التاريخ والوقت:</span>{' '}
+                  <span className='text-gray-700'>
+                    {appointment.date
+                      ? moment(appointment.date).format('YYYY-MM-DD HH:mm')
+                      : '-'}
+                  </span>
+                </p>
+                <p>
+                  <span className='font-semibold'>الحالة:</span>{' '}
+                  <Badge className='bg-blue-100 text-blue-800 px-2 py-1 rounded-md'>
+                    {appointment.status || '-'}
+                  </Badge>
+                </p>
+                <p>
+                  <span className='font-semibold'>ملاحظات:</span>{' '}
+                  <span className='text-gray-700'>
+                    {appointment.notes || '-'}
+                  </span>
+                </p>
+              </div>
+            </motion.div>
+          </CardContent>
+        </Card>
+
+        {/* مراحل العلاج */}
+        <Card className='bg-white shadow-lg rounded-2xl overflow-hidden'>
+          <CardContent className='p-6 space-y-4'>
+            <motion.h2
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ duration: 0.4 }}
+              className='text-xl font-bold text-gray-800 text-right mb-4'
+            >
+              مراحل العلاج
+            </motion.h2>
+
+            {treatmentStages.length > 0 ? (
+              <div className='space-y-3'>
+                {treatmentStages.map((stage: TreatmentStage) => (
+                  <motion.div
+                    key={stage._id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className='border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors'
+                  >
+                    <div className='flex justify-between items-start mb-2'>
+                      <h3 className='text-lg font-semibold text-gray-800'>
+                        {stage.title}
+                      </h3>
+                      <div className='flex items-center gap-2'>
+                        {stage.isCompleted ? (
+                          <CheckCircle2 className='text-green-600 w-5 h-5' />
+                        ) : (
+                          <XCircle className='text-red-600 w-5 h-5' />
+                        )}
+                        <Badge
+                          variant={stage.isCompleted ? 'default' : 'outline'}
+                          className='text-xs'
+                        >
+                          {stage.isCompleted ? 'مكتملة' : 'غير مكتملة'}
+                        </Badge>
+                      </div>
+                    </div>
+                    {stage.description && (
+                      <p className='text-gray-700 mb-2'>{stage.description}</p>
+                    )}
+                    <div className='grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600'>
+                      <p>
+                        <span className='font-semibold'>التاريخ:</span>{' '}
+                        {stage.date
+                          ? moment(stage.date).format('YYYY-MM-DD HH:mm')
+                          : '-'}
+                      </p>
+                      <p>
+                        <span className='font-semibold'>الطبيب:</span>{' '}
+                        {typeof stage.doctor === 'object' && stage.doctor !== null
+                          ? stage.doctor.name
+                          : '-'}
+                      </p>
+                      <p>
+                        <span className='font-semibold'>التكلفة:</span>{' '}
+                        {stage.cost ? `${stage.cost.toLocaleString()} ل.س` : '0 ل.س'}
+                      </p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            ) : (
+              <p className='text-center text-gray-500 py-8'>
+                لا توجد مراحل علاجية لهذا الموعد
+              </p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* سجل الأنشطة */}
+        {canViewAppointmentActivities && (
+          <AppointmentActivities appointmentId={appointmentId as string} />
+        )}
+
+        {/* زر العودة للمواعيد */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
+          className='flex justify-end'
+        >
+          <Button variant='outline' onClick={() => router.back()}>
+            العودة للمواعيد
+          </Button>
+        </motion.div>
+      </motion.div>
+    </div>
+  )
+}

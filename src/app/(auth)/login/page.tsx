@@ -28,7 +28,27 @@ export default function LoginPage() {
 
       // إعادة التوجيه للوحة التحكم أو الصفحة الرئيسية
       router.push('/dashboard')
-    } catch (err) {
+    } catch (err: unknown) {
+      // Check for CORS errors
+      if (
+        (err as { code?: string; message?: string; response?: unknown }).code === 'ERR_NETWORK' ||
+        (err as { code?: string; message?: string; response?: unknown }).code === 'ERR_FAILED' ||
+        ((err as { message?: string; response?: unknown }).message?.includes('CORS') && 
+         !(err as { response?: unknown }).response)
+      ) {
+        setError('خطأ في الاتصال بالخادم. يرجى التحقق من إعدادات CORS في الخادم الخلفي.')
+        return
+      }
+
+      // Check for API error response
+      if (
+        (err as { response?: { data?: { message?: string } } }).response?.data?.message
+      ) {
+        setError((err as { response: { data: { message: string } } }).response.data.message)
+        return
+      }
+
+      // Generic error
       const errorMessage = err instanceof Error ? err.message : 'حدث خطأ ما'
       setError(errorMessage)
     }

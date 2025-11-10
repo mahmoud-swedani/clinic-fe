@@ -40,6 +40,35 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Handle CORS errors
+    // CORS errors typically have no response and network error codes
+    const isCorsError = 
+      (!error.response && (error.message?.includes('CORS') || error.code === 'ERR_NETWORK' || error.code === 'ERR_FAILED')) ||
+      (error.response?.status === 0) // Sometimes CORS shows as status 0
+    
+    if (isCorsError) {
+      const method = error.config?.method?.toUpperCase() || 'UNKNOWN'
+      const url = error.config?.url || 'unknown'
+      const baseURL = instance.defaults.baseURL || 'not set'
+      const fullURL = error.config?.baseURL 
+        ? `${error.config.baseURL}${url}`
+        : `${baseURL}${url}`
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'unknown'
+      
+      console.error(
+        `❌ CORS Error - Backend not configured to allow requests from frontend:\n` +
+        `  Frontend Origin: ${origin}\n` +
+        `  Backend URL: ${fullURL}\n` +
+        `  Method: ${method}\n` +
+        `\n⚠️  This must be fixed on the backend server.\n` +
+        `   The backend needs to set these headers:\n` +
+        `   - Access-Control-Allow-Origin: ${origin}\n` +
+        `   - Access-Control-Allow-Credentials: true\n` +
+        `   - Access-Control-Allow-Methods: GET, POST, PUT, DELETE, PATCH, OPTIONS\n` +
+        `   - Access-Control-Allow-Headers: Content-Type, Authorization\n`
+      )
+    }
+
     // Log 404 errors for debugging
     if (error.response?.status === 404) {
       const method = error.config?.method?.toUpperCase() || 'UNKNOWN'

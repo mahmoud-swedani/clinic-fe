@@ -2,14 +2,19 @@
 import axios from 'axios'
 
 // Get base URL from environment variable
-// If NEXT_PUBLIC_API_URL is set, use it as-is (it should include the full path)
-// Otherwise, default to localhost with /api prefix
+// Ensures the baseURL always ends with /api
 const getBaseURL = () => {
   const envUrl = process.env.NEXT_PUBLIC_API_URL
   if (envUrl) {
-    // If environment variable is set, use it as-is
-    // It should be the full URL (e.g., https://clinic-be-production.up.railway.app/api)
-    return envUrl
+    // Remove trailing slash if present
+    const cleanUrl = envUrl.replace(/\/$/, '')
+    // Ensure /api is appended if not already present
+    if (cleanUrl.endsWith('/api')) {
+      return cleanUrl
+    }
+    // It should be the full URL (e.g., https://clinic-be-production.up.railway.app)
+    // We append /api to ensure consistency
+    return `${cleanUrl}/api`
   }
   // Default to localhost with /api prefix for development
   return 'http://localhost:5000/api'
@@ -35,12 +40,23 @@ instance.interceptors.request.use(
 instance.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Log 404 errors for debugging (only in development)
-    if (error.response?.status === 404 && process.env.NODE_ENV === 'development') {
-      console.warn(
-        `API endpoint not found: ${error.config?.method?.toUpperCase()} ${error.config?.url}`,
-        `\nBase URL: ${instance.defaults.baseURL}`,
-        `\nFull URL: ${error.config?.baseURL}${error.config?.url}`
+    // Log 404 errors for debugging
+    if (error.response?.status === 404) {
+      const method = error.config?.method?.toUpperCase() || 'UNKNOWN'
+      const url = error.config?.url || 'unknown'
+      const baseURL = instance.defaults.baseURL || 'not set'
+      const fullURL = error.config?.baseURL 
+        ? `${error.config.baseURL}${url}`
+        : `${baseURL}${url}`
+      
+      console.error(
+        `❌ API endpoint not found (404):\n` +
+        `  Method: ${method}\n` +
+        `  Endpoint: ${url}\n` +
+        `  Base URL: ${baseURL}\n` +
+        `  Full URL: ${fullURL}\n` +
+        `  Environment: ${process.env.NODE_ENV}\n` +
+        `  NEXT_PUBLIC_API_URL: ${process.env.NEXT_PUBLIC_API_URL || 'not set'}`
       )
     }
 

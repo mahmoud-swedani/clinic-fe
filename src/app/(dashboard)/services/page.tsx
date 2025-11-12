@@ -11,6 +11,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useUserPermissions } from '@/hooks/usePermissions'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function ServicesContent() {
   const { page, limit, goToPage, changeLimit } = usePagination(10)
@@ -57,59 +65,57 @@ function ServicesContent() {
               لا توجد خدمات حتى الآن
             </p>
           ) : (
-            <div className='overflow-x-auto'>
-              <table className='min-w-full text-sm'>
-                <thead>
-                  <tr className='border-b bg-gray-100 text-right'>
-                    <th className='px-4 py-2'>اسم الخدمة</th>
-                    <th className='px-4 py-2'>الوصف</th>
-                    <th className='px-4 py-2'>السعر</th>
-                    <th className='px-4 py-2'>المدة (دقيقة)</th>
-                    <th className='px-4 py-2'>الحالة</th>
-                    <th className='px-4 py-2'>الإجراءات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {services.map((service: Service) => (
-                    <tr key={service._id} className='border-b hover:bg-gray-50'>
-                      <td className='px-4 py-2'>
-                        <Link
-                          href={`/services/${service._id}`}
-                          className='text-blue-600 hover:underline font-medium'
-                        >
-                          {service.name}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className='text-right'>اسم الخدمة</TableHead>
+                  <TableHead className='text-right'>الوصف</TableHead>
+                  <TableHead className='text-right'>السعر</TableHead>
+                  <TableHead className='text-right'>المدة (دقيقة)</TableHead>
+                  <TableHead className='text-right'>الحالة</TableHead>
+                  <TableHead className='text-right'>الإجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {services.map((service: Service) => (
+                  <TableRow key={service._id} className='hover:bg-gray-50 transition-colors'>
+                    <TableCell>
+                      <Link
+                        href={`/services/${service._id}`}
+                        className='text-blue-600 hover:underline font-medium'
+                      >
+                        {service.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className='text-gray-600 max-w-xs truncate'>
+                      {service.description || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {service.price?.toLocaleString() || '0'} ر.س
+                    </TableCell>
+                    <TableCell>{service.duration || '-'}</TableCell>
+                    <TableCell>
+                      <span
+                        className={`px-2 py-1 rounded text-xs ${
+                          service.isActive
+                            ? 'bg-green-100 text-green-800'
+                            : 'bg-red-100 text-red-800'
+                        }`}
+                      >
+                        {service.isActive ? 'مفعّل' : 'معطّل'}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Button asChild size='sm' variant='outline'>
+                        <Link href={`/services/${service._id}`}>
+                          عرض التفاصيل
                         </Link>
-                      </td>
-                      <td className='px-4 py-2 text-gray-600 max-w-xs truncate'>
-                        {service.description || '-'}
-                      </td>
-                      <td className='px-4 py-2'>
-                        {service.price?.toLocaleString() || '0'} ر.س
-                      </td>
-                      <td className='px-4 py-2'>{service.duration || '-'}</td>
-                      <td className='px-4 py-2'>
-                        <span
-                          className={`px-2 py-1 rounded text-xs ${
-                            service.isActive
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-red-100 text-red-800'
-                          }`}
-                        >
-                          {service.isActive ? 'مفعّل' : 'معطّل'}
-                        </span>
-                      </td>
-                      <td className='px-4 py-2'>
-                        <Button asChild size='sm' variant='outline'>
-                          <Link href={`/services/${service._id}`}>
-                            عرض التفاصيل
-                          </Link>
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

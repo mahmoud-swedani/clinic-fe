@@ -7,28 +7,92 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card, CardContent } from '@/components/ui/card'
 import { Label } from '@/components/ui/label'
-import { useState } from 'react'
+import { useState, useTransition } from 'react'
 import { LoginRequest } from '@/types/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function LoginPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [error, setError] = useState('')
+  const [isLoading, setIsLoading] = useState(false)
+  const [isPending, startTransition] = useTransition()
   const {
     register,
     handleSubmit,
     formState: { errors },
   } = useForm<LoginRequest>()
 
+  // Helper function to determine dashboard URL based on role
+  const getDashboardUrl = (role?: string): string => {
+    switch (role) {
+      case 'طبيب':
+        return '/dashboard/doctor'
+      case 'سكرتير':
+        return '/dashboard/reception'
+      case 'محاسب':
+        return '/dashboard/accountant'
+      case 'مالك':
+      case 'مدير':
+      default:
+        return '/dashboard'
+    }
+  }
+
   const onSubmit = async (data: LoginRequest) => {
+    setIsLoading(true)
+    setError('')
+    
     try {
-      await axios.post('/auth/login', data)
+      const response = await axios.post<{
+        data: {
+          token: string
+          user: {
+            id: string
+            name: string
+            email: string
+            role: string
+            branch?: string
+          }
+        }
+        message: string
+      }>('/auth/login', data)
 
       // Token is automatically stored in httpOnly cookie by backend
       // No need to store in localStorage or client-side cookies
 
-      // إعادة التوجيه للوحة التحكم أو الصفحة الرئيسية
-      router.push('/dashboard')
+      // Cache user data immediately for faster subsequent access
+      if (response.data?.data?.user) {
+        queryClient.setQueryData(queryKeys.currentUser.me(), response.data.data.user)
+      }
+
+      // Get user role from response and redirect to role-specific dashboard
+      const userRole = response.data?.data?.user?.role
+      const dashboardUrl = getDashboardUrl(userRole)
+      
+      // Prefetch the dashboard route for faster navigation
+      router.prefetch(dashboardUrl)
+      
+      // Use transition for smoother redirect
+      startTransition(() => {
+        router.replace(dashboardUrl)
+      })
     } catch (err: unknown) {
+      // Check for rate limiting (429 Too Many Requests)
+      if ((err as { response?: { status?: number } }).response?.status === 429) {
+        const retryAfter = (err as { response?: { headers?: { 'retry-after'?: string } } }).response?.headers?.['retry-after']
+        const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : 15 * 60 // Default to 15 minutes
+        
+        if (retryAfterSeconds < 60) {
+          setError(`تم تجاوز عدد محاولات تسجيل الدخول. يرجى المحاولة بعد ${retryAfterSeconds} ثانية.`)
+        } else {
+          const minutes = Math.ceil(retryAfterSeconds / 60)
+          setError(`تم تجاوز عدد محاولات تسجيل الدخول. يرجى المحاولة بعد ${minutes} دقيقة.`)
+        }
+        return
+      }
+
       // Check for CORS errors
       if (
         (err as { code?: string; message?: string; response?: unknown }).code === 'ERR_NETWORK' ||
@@ -51,6 +115,8 @@ export default function LoginPage() {
       // Generic error
       const errorMessage = err instanceof Error ? err.message : 'حدث خطأ ما'
       setError(errorMessage)
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -89,8 +155,13 @@ export default function LoginPage() {
               )}
             </div>
             {error && <p className='text-sm text-red-500'>{error}</p>}
-            <Button type='submit' className='w-full' suppressHydrationWarning>
-              دخول
+            <Button 
+              type='submit' 
+              className='w-full' 
+              disabled={isLoading || isPending}
+              suppressHydrationWarning
+            >
+              {isLoading || isPending ? 'جاري تسجيل الدخول...' : 'دخول'}
             </Button>
           </form>
         </CardContent>

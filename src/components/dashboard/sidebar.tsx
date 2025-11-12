@@ -1,9 +1,8 @@
 'use client'
 
-import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import { cn } from '@/lib/utils'
-import { useState } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import {
   Users,
   Calendar,
@@ -21,11 +20,14 @@ import {
   Layers,
   UserCog,
   Key,
+  Loader2,
 } from 'lucide-react'
 
 // 🔹 استيراد هوك المستخدم الحالي
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useUserPermissions } from '@/hooks/usePermissions'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useNavigation } from '@/contexts/NavigationContext'
 
 // Helper function to get dashboard href based on role
 const getDashboardHref = (userRole?: string): string => {
@@ -115,12 +117,51 @@ const navItems = [
   },
 ]
 
+// Helper function to get default permissions for a role (when permissions array is empty)
+const getDefaultPermissionsForRole = (role?: string): string[] => {
+  switch (role) {
+    case 'سكرتير': // Receptionist
+      return [
+        'appointments.view',
+        'appointments.create',
+        'appointments.edit',
+        'patients.view',
+        'patients.create',
+        'patients.edit',
+        // Note: treatment-stages and invoices removed - receptionists don't have permission
+      ]
+    case 'طبيب': // Doctor
+      return [
+        'appointments.view',
+        'appointments.edit',
+        'patients.view',
+        'treatment-stages.view',
+        'treatment-stages.create',
+        'treatment-stages.edit',
+      ]
+    case 'محاسب': // Accountant
+      return [
+        'invoices.view',
+        'invoices.create',
+        'invoices.edit',
+        'financial-records.view',
+        'financial-records.create',
+        'financial-records.edit',
+        'sales.view',
+        'sales.create',
+      ]
+    default:
+      return []
+  }
+}
+
 // Helper function to check if menu item should be shown based on permissions
 const shouldShowMenuItem = (
   permission: string | null,
   userRole?: string,
   hasPermission?: (perm: string) => boolean,
-  hasAnyPermission?: (perms: string[]) => boolean
+  hasAnyPermission?: (perms: string[]) => boolean,
+  userPermissions?: string[] // Add user permissions array
 ): boolean => {
   // Owner and Manager can see all items
   if (userRole === 'مالك' || userRole === 'مدير') {
@@ -132,50 +173,92 @@ const shouldShowMenuItem = (
     return true
   }
 
-  // Check if user has the required permission
-  if (hasPermission && hasAnyPermission) {
-    // Extract the feature name (e.g., 'sales' from 'sales.view')
-    const featureName = permission.split('.')[0]
-    
-    // Check if user has ANY permission for this feature (view, create, edit, or delete)
-    const relatedPermissions = [
-      `${featureName}.view`,
-      `${featureName}.create`,
-      `${featureName}.edit`,
-      `${featureName}.delete`,
-    ]
-    
-    return hasAnyPermission(relatedPermissions)
-  }
+  // If user has no permissions, use role-based defaults
+  const effectivePermissions = (userPermissions && userPermissions.length > 0)
+    ? userPermissions
+    : getDefaultPermissionsForRole(userRole)
 
-  return false
+  // Extract the feature name (e.g., 'sales' from 'sales.view')
+  const featureName = permission.split('.')[0]
+  
+  // Check if user has ANY permission for this feature (view, create, edit, or delete)
+  const relatedPermissions = [
+    `${featureName}.view`,
+    `${featureName}.create`,
+    `${featureName}.edit`,
+    `${featureName}.delete`,
+  ]
+  
+  return relatedPermissions.some(perm => effectivePermissions.includes(perm))
 }
 
 export default function Sidebar() {
   const pathname = usePathname()
+  const router = useRouter()
   const [collapsed, setCollapsed] = useState(false)
+  const [isPending, startTransition] = useTransition()
+  const [navigatingTo, setNavigatingTo] = useState<string | null>(null)
+  const { setIsNavigating } = useNavigation() // Now safe - returns default if context unavailable
 
-  const { data: user } = useCurrentUser()
-  const { hasPermission, hasAnyPermission } = useUserPermissions()
+  const { data: user, isLoading: userLoading, isFetching: userFetching, isError: userError } = useCurrentUser()
+  const { hasPermission, hasAnyPermission, permissions: userPermissions } = useUserPermissions()
 
   const isOwnerOrManager =
     user?.role === 'مالك' || user?.role === 'مدير'
 
-  // Filter menu items based on permissions
-  const visibleNavItems = navItems
-    .filter((item) =>
-      shouldShowMenuItem(item.permission, user?.role, hasPermission, hasAnyPermission)
-    )
-    .map((item) => {
-      // Override dashboard href based on user role
-      if (item.href === '/dashboard') {
-        return {
-          ...item,
-          href: getDashboardHref(user?.role),
-        }
-      }
-      return item
+  // Check if user data is loading or fetching (consistent loading state)
+  const isUserLoading = userLoading || userFetching
+
+  // Reset navigating state when pathname changes (navigation completed)
+  useEffect(() => {
+    setNavigatingTo(null)
+    setIsNavigating(false)
+  }, [pathname, setIsNavigating])
+
+  // Update global navigation state
+  useEffect(() => {
+    setIsNavigating(isPending)
+  }, [isPending, setIsNavigating])
+
+  // Handle navigation with transition
+  const handleNavigation = (href: string) => {
+    setNavigatingTo(href)
+    setIsNavigating(true)
+    startTransition(() => {
+      router.push(href)
     })
+  }
+
+  // Prefetch route on hover
+  const handleMouseEnter = (href: string) => {
+    router.prefetch(href)
+  }
+
+  // Filter menu items based on permissions
+  // Only filter and show items when user data is loaded (not loading/fetching and no error)
+  const visibleNavItems = isUserLoading || userError || !user
+    ? [] // Don't show any items while loading/fetching or on error
+    : navItems
+        .filter((item) => {
+          const shouldShow = shouldShowMenuItem(
+            item.permission, 
+            user?.role, 
+            hasPermission, 
+            hasAnyPermission,
+            userPermissions
+          )
+          return shouldShow
+        })
+        .map((item) => {
+          // Override dashboard href based on user role
+          if (item.href === '/dashboard') {
+            return {
+              ...item,
+              href: getDashboardHref(user?.role),
+            }
+          }
+          return item
+        })
 
   return (
     <aside
@@ -193,74 +276,150 @@ export default function Sidebar() {
       </button>
 
       <nav className='space-y-2 flex-1 w-full'>
-        {visibleNavItems.map((item) => {
-          // Special handling for dashboard - check if pathname matches any dashboard route
-          const isDashboardActive = item.href.startsWith('/dashboard') && 
-            (pathname === '/dashboard' || 
-             pathname === '/dashboard/doctor' || 
-             pathname === '/dashboard/reception' || 
-             pathname === '/dashboard/accountant')
-          
-          const isActive = item.href.startsWith('/dashboard') 
-            ? isDashboardActive 
-            : pathname.startsWith(item.href)
-          
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition',
-                isActive && 'bg-gray-300 font-bold',
-                collapsed ? 'justify-center' : ''
-              )}
-            >
-              {item.icon}
-              {!collapsed && <span>{item.name}</span>}
-            </Link>
-          )
-        })}
-
-        {/* رابط المستخدمين يظهر فقط للمالك أو المدير أو الأدمن */}
-        {isOwnerOrManager && (
-          <Link
-            href='/users'
-            className={cn(
-              'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition',
-              pathname.startsWith('/users') && 'bg-gray-300 font-bold',
-              collapsed ? 'justify-center' : ''
-            )}
-          >
-            <Shield size={20} />
-            {!collapsed && <span>المستخدمين</span>}
-          </Link>
+        {isUserLoading ? (
+          // Show loading skeleton while user data is loading or fetching
+          <div className='space-y-2'>
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton
+                key={i}
+                className={cn(
+                  'h-10 w-full',
+                  collapsed && 'h-10 w-10 rounded-full'
+                )}
+              />
+            ))}
+          </div>
+        ) : userError || !user ? (
+          // Show error state if user data failed to load
+          <div className='text-sm text-red-500 p-2'>
+            حدث خطأ أثناء تحميل البيانات
+          </div>
+        ) : visibleNavItems.length === 0 ? (
+          // Show message if no items are available (shouldn't happen, but handle gracefully)
+          <div className='text-sm text-gray-500 p-2'>
+            لا توجد عناصر للعرض
+          </div>
+        ) : (
+          // Show filtered menu items
+          visibleNavItems.map((item) => {
+            // item.href is already transformed (dashboard href is already set based on role)
+            const actualHref = item.href
+            
+            // Check if this is a main dashboard route (not analytics or other sub-routes)
+            // Main dashboard routes are: /dashboard, /dashboard/doctor, /dashboard/reception, /dashboard/accountant
+            const isMainDashboard = actualHref === '/dashboard' || 
+              actualHref === '/dashboard/doctor' || 
+              actualHref === '/dashboard/reception' || 
+              actualHref === '/dashboard/accountant'
+            
+            // For main dashboard routes, only match exact pathname (to avoid matching /dashboard/analytics/executive)
+            // For analytics and other sub-routes, check if pathname starts with the href followed by / or is exact match
+            const isActive = isMainDashboard
+              ? pathname === actualHref  // Exact match only for main dashboard routes
+              : pathname === actualHref || pathname.startsWith(actualHref + '/')  // Exact or starts with for sub-routes
+            
+            const isNavigating = navigatingTo === actualHref && isPending
+            
+            return (
+              <button
+                key={item.href}
+                onClick={() => handleNavigation(actualHref)}
+                onMouseEnter={() => handleMouseEnter(actualHref)}
+                className={cn(
+                  'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition w-full text-right',
+                  isActive && 'bg-gray-300 font-bold',
+                  isNavigating && 'opacity-70',
+                  collapsed ? 'justify-center' : ''
+                )}
+                disabled={isNavigating}
+              >
+                {isNavigating ? (
+                  <Loader2 className="animate-spin" size={20} />
+                ) : (
+                  item.icon
+                )}
+                {!collapsed && <span>{item.name}</span>}
+              </button>
+            )
+          })
         )}
 
+        {/* رابط المستخدمين يظهر فقط للمالك أو المدير أو الأدمن */}
+        {/* Only show these links when user is loaded and not in error state */}
+        {!isUserLoading && !userError && user && isOwnerOrManager && (() => {
+          const isNavigating = navigatingTo === '/users' && isPending
+          return (
+            <button
+              onClick={() => handleNavigation('/users')}
+              onMouseEnter={() => handleMouseEnter('/users')}
+              className={cn(
+                'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition w-full text-right',
+                pathname.startsWith('/users') && 'bg-gray-300 font-bold',
+                isNavigating && 'opacity-70',
+                collapsed ? 'justify-center' : ''
+              )}
+              disabled={isNavigating}
+            >
+              {isNavigating ? (
+                <Loader2 className="animate-spin" size={20} />
+              ) : (
+                <Shield size={20} />
+              )}
+              {!collapsed && <span>المستخدمين</span>}
+            </button>
+          )
+        })()}
+
         {/* رابط الأدوار والصلاحيات يظهر فقط للمالك */}
-        {user?.role === 'مالك' && (
+        {/* Only show these links when user is loaded and not in error state */}
+        {!isUserLoading && !userError && user?.role === 'مالك' && (
           <>
-            <Link
-              href='/roles'
-              className={cn(
-                'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition',
-                pathname.startsWith('/roles') && 'bg-gray-300 font-bold',
-                collapsed ? 'justify-center' : ''
-              )}
-            >
-              <UserCog size={20} />
-              {!collapsed && <span>الأدوار</span>}
-            </Link>
-            <Link
-              href='/permissions'
-              className={cn(
-                'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition',
-                pathname.startsWith('/permissions') && 'bg-gray-300 font-bold',
-                collapsed ? 'justify-center' : ''
-              )}
-            >
-              <Key size={20} />
-              {!collapsed && <span>الصلاحيات</span>}
-            </Link>
+            {(() => {
+              const isNavigating = navigatingTo === '/roles' && isPending
+              return (
+                <button
+                  onClick={() => handleNavigation('/roles')}
+                  onMouseEnter={() => handleMouseEnter('/roles')}
+                  className={cn(
+                    'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition w-full text-right',
+                    pathname.startsWith('/roles') && 'bg-gray-300 font-bold',
+                    isNavigating && 'opacity-70',
+                    collapsed ? 'justify-center' : ''
+                  )}
+                  disabled={isNavigating}
+                >
+                  {isNavigating ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : (
+                    <UserCog size={20} />
+                  )}
+                  {!collapsed && <span>الأدوار</span>}
+                </button>
+              )
+            })()}
+            {(() => {
+              const isNavigating = navigatingTo === '/permissions' && isPending
+              return (
+                <button
+                  onClick={() => handleNavigation('/permissions')}
+                  onMouseEnter={() => handleMouseEnter('/permissions')}
+                  className={cn(
+                    'flex items-center gap-2 p-2 rounded hover:bg-gray-200 transition w-full text-right',
+                    pathname.startsWith('/permissions') && 'bg-gray-300 font-bold',
+                    isNavigating && 'opacity-70',
+                    collapsed ? 'justify-center' : ''
+                  )}
+                  disabled={isNavigating}
+                >
+                  {isNavigating ? (
+                    <Loader2 className="animate-spin" size={20} />
+                  ) : (
+                    <Key size={20} />
+                  )}
+                  {!collapsed && <span>الصلاحيات</span>}
+                </button>
+              )
+            })()}
           </>
         )}
       </nav>

@@ -1,7 +1,7 @@
 // src/app/(dashboard)/appointments/[id]/page.tsx
 'use client'
 
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import axios from '@/lib/axios'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,12 +18,16 @@ import {
 import moment from 'moment'
 import { TreatmentStageForm } from '@/components/treatment-stages/treatment-stage-form'
 import { motion } from 'framer-motion'
-import { Appointment, Patient, User, TreatmentStage, Service, Department } from '@/types/api'
+import { Appointment, Patient, User, TreatmentStage, ApiResponse } from '@/types/api'
 import { useUserPermissions } from '@/hooks/usePermissions'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Pencil } from 'lucide-react'
 import { AppointmentForm } from '@/components/appointments/appointment-form'
 import { AppointmentActivities } from '@/components/appointments/appointment-activities'
+import { TreatmentStageEditForm } from '@/components/treatment-stages/treatment-stage-edit-form'
+import { useAllFormData } from '@/hooks/useFormData'
+import { queryKeys } from '@/lib/queryKeys'
+import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 moment.locale('ar')
 
@@ -42,17 +46,30 @@ export default function AppointmentDetailPage() {
   const router = useRouter()
   const params = useParams()
   const appointmentId = params.id
-  const { canAddTreatmentStageFromAppointment, canManageAppointments, canViewAppointmentActivities } = useUserPermissions()
+  const queryClient = useQueryClient()
+  const { canAddTreatmentStageFromAppointment, canManageAppointments, canViewAppointmentActivities, hasPermission } = useUserPermissions()
+  const canEditStage = hasPermission('treatment-stages.edit')
 
-  const [appointment, setAppointment] = useState<Appointment | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
   const [openAddStage, setOpenAddStage] = useState(false)
   const [openEditForm, setOpenEditForm] = useState(false)
-  const [patients, setPatients] = useState<Patient[]>([])
-  const [doctors, setDoctors] = useState<User[]>([])
-  const [services, setServices] = useState<Service[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
+  const [openEditStage, setOpenEditStage] = useState(false)
+  const [selectedStage, setSelectedStage] = useState<TreatmentStage | null>(null)
+
+  // Get current user for branch filtering
+  const { data: user } = useCurrentUser()
+  const branchId = typeof user?.branch === 'object' && user?.branch !== null 
+    ? (user.branch as { _id: string })._id 
+    : user?.branch
+
+  // Fetch appointment using React Query
+  const { data: appointment, isLoading: appointmentLoading, error: appointmentError, refetch: refetchAppointment } = useQuery({
+    queryKey: queryKeys.appointments.detail(appointmentId as string),
+    queryFn: async () => {
+      const { data } = await axios.get<ApiResponse<Appointment>>(`/appointments/${appointmentId}`)
+      return data.data
+    },
+    enabled: !!appointmentId,
+  })
 
   // Fetch treatment stages for this appointment
   const { data: treatmentStagesData, refetch: refetchStages } = useQuery({
@@ -70,53 +87,14 @@ export default function AppointmentDetailPage() {
 
   const treatmentStages = treatmentStagesData || []
 
-  useEffect(() => {
-    if (!appointmentId) return
+  // Fetch form data using cached hooks (data is cached globally)
+  const { patients, doctors, services, departments } = useAllFormData(branchId)
 
-    setLoading(true)
-    setError(null)
-
-    axios
-      .get(`/appointments/${appointmentId}`)
-      .then((res) => {
-        // The API returns { success: true, data: <appointment> }
-        const appointmentData = res.data?.data || res.data
-        setAppointment(appointmentData)
-      })
-      .catch((err) => {
-        console.error('Error fetching appointment:', err)
-        const errorMessage = err.response?.data?.error || err.response?.data?.message || 'تعذر تحميل تفاصيل الموعد.'
-        setError(errorMessage)
-      })
-      .finally(() => {
-        setLoading(false)
-      })
-  }, [appointmentId])
-
-  // Fetch patients, doctors, services, and departments for the form
-  useEffect(() => {
-    async function fetchFormData() {
-      try {
-        const [patientsRes, doctorsRes, servicesRes, departmentsRes] = await Promise.all([
-          axios.get('/patients'),
-          axios.get('/user-roles/doctors'),
-          axios.get('/services'),
-          axios.get('/departments'),
-        ])
-
-        setPatients(patientsRes.data?.data || patientsRes.data || [])
-        setDoctors(doctorsRes.data?.data || doctorsRes.data || [])
-        setServices(servicesRes.data?.data || servicesRes.data || [])
-        setDepartments(departmentsRes.data?.data || departmentsRes.data || [])
-      } catch (error) {
-        console.error('Error fetching form data:', error)
-      }
-    }
-
-    if (openEditForm) {
-      fetchFormData()
-    }
-  }, [openEditForm])
+  // Set loading and error states
+  const loading = appointmentLoading
+  const error = appointmentError 
+    ? (appointmentError as { response?: { data?: { message?: string } } })?.response?.data?.message || 'تعذر تحميل تفاصيل الموعد.'
+    : null
 
   if (loading) {
     return (
@@ -184,16 +162,14 @@ export default function AppointmentDetailPage() {
                     initialData={appointment}
                     onSuccess={() => {
                       setOpenEditForm(false)
-                      // Reload appointment data
-                      axios
-                        .get(`/appointments/${appointmentId}`)
-                        .then((res) => {
-                          const appointmentData = res.data?.data || res.data
-                          setAppointment(appointmentData)
-                        })
-                        .catch((err) => {
-                          console.error('Error fetching appointment:', err)
-                        })
+                      // Invalidate all appointment queries to ensure updates are reflected everywhere
+                      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+                      queryClient.invalidateQueries({ queryKey: ['appointments', 'all-shared'] })
+                      queryClient.invalidateQueries({ queryKey: queryKeys.appointments.detail(appointmentId as string) })
+                      // Force refetch of ALL queries (not just active) to immediately update the UI for all users
+                      queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+                      // Refetch the current appointment detail
+                      refetchAppointment()
                     }}
                   />
                 )}
@@ -340,6 +316,21 @@ export default function AppointmentDetailPage() {
                         {stage.title}
                       </h3>
                       <div className='flex items-center gap-2'>
+                        {canEditStage && (
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedStage(stage)
+                              setOpenEditStage(true)
+                            }}
+                            className='h-8 w-8 p-0'
+                            title='تعديل المرحلة'
+                          >
+                            <Pencil className='w-4 h-4' />
+                          </Button>
+                        )}
                         {stage.isCompleted ? (
                           <CheckCircle2 className='text-green-600 w-5 h-5' />
                         ) : (
@@ -402,6 +393,32 @@ export default function AppointmentDetailPage() {
           </Button>
         </motion.div>
       </motion.div>
+
+      {/* Edit Stage Dialog */}
+      {canEditStage && (
+        <Dialog open={openEditStage} onOpenChange={setOpenEditStage}>
+          <DialogContent className='max-w-2xl' dir='rtl'>
+            <DialogHeader>
+              <DialogTitle>تعديل المرحلة العلاجية</DialogTitle>
+              <DialogDescription>قم بتعديل بيانات المرحلة العلاجية</DialogDescription>
+            </DialogHeader>
+            {selectedStage && (
+              <TreatmentStageEditForm
+                stage={selectedStage}
+                onSuccess={() => {
+                  setOpenEditStage(false)
+                  setSelectedStage(null)
+                  refetchStages()
+                }}
+                onCancel={() => {
+                  setOpenEditStage(false)
+                  setSelectedStage(null)
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

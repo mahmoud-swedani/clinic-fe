@@ -1,5 +1,6 @@
 // src/lib/axios.ts
 import axios from 'axios'
+import { performanceMonitor } from './performance'
 
 // Get base URL from environment variable
 // Ensures the baseURL always ends with /api
@@ -29,6 +30,11 @@ instance.interceptors.request.use(
   (config) => {
     // Cookies are sent automatically with withCredentials: true
     // No need to manually add Authorization header
+    
+    // Add timestamp for performance tracking
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ;(config as any).__startTime = performance.now()
+    
     return config
   },
   (error) => {
@@ -38,8 +44,26 @@ instance.interceptors.request.use(
 
 // إضافة interceptor للاستجابة للتعامل مع أخطاء المصادقة
 instance.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // Track API performance
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const startTime = (response.config as any).__startTime
+    if (startTime) {
+      const duration = performance.now() - startTime
+      const url = response.config.url || 'unknown'
+      performanceMonitor.trackApiCall(url, duration)
+    }
+    return response
+  },
   (error) => {
+    // Track API performance even for errors
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const startTime = (error.config as any)?.__startTime
+    if (startTime) {
+      const duration = performance.now() - startTime
+      const url = error.config?.url || 'unknown'
+      performanceMonitor.trackApiCall(url, duration)
+    }
     // Handle CORS errors
     // CORS errors typically have no response and network error codes
     const isCorsError = 

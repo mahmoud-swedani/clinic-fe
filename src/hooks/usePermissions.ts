@@ -136,7 +136,7 @@ export function usePermissionCategories() {
  * This replaces the hardcoded permission logic
  */
 export function useUserPermissions() {
-  const { data: user, isLoading: userLoading } = useCurrentUser()
+  const { data: user } = useCurrentUser()
   
   // Use permissions directly from user object (returned by /api/auth/me)
   // This avoids needing to fetch all roles which requires admin permissions
@@ -147,17 +147,11 @@ export function useUserPermissions() {
     return []
   }, [user?.permissions])
 
-  // Debug logging
-  if (process.env.NODE_ENV === 'development') {
-    console.log('[useUserPermissions] User:', user)
-    console.log('[useUserPermissions] User roleId:', user?.roleId)
-    console.log('[useUserPermissions] User role name:', user?.role)
-    console.log('[useUserPermissions] User permissions:', user?.permissions)
-    console.log('[useUserPermissions] Permissions array:', permissions)
-    console.log('[useUserPermissions] Loading states - User:', userLoading)
-  }
+  // Debug logging removed for cleaner console
 
   return {
+    // Expose permissions array for role-based fallbacks
+    permissions,
     // Check individual permissions
     hasPermission: (permission: string) => permissions.includes(permission),
     hasAnyPermission: (permissionList: string[]) =>
@@ -181,6 +175,8 @@ export function useUserPermissions() {
       permissions.includes('appointments.add-treatment-stage'),
     canViewAppointmentActivities:
       permissions.includes('appointments.view-activities'),
+    canViewTreatmentStageActivities:
+      permissions.includes('treatment-stages.view-activities'),
     canManageProducts:
       permissions.includes('products.create') ||
       permissions.includes('products.edit'),
@@ -211,6 +207,5 @@ export function useUserPermissions() {
 
     // User role
     role: user?.role,
-    permissions,
   }
 }

@@ -7,20 +7,22 @@ import { ArrowRight } from 'lucide-react'
 import { toast } from 'sonner'
 import axios from '@/lib/axios'
 import { CreatePatientRequest } from '@/types/api'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Patient } from '@/types/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useRef } from 'react'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function EditPatientPage() {
   const router = useRouter()
   const params = useParams()
   const patientId = params.id as string
+  const queryClient = useQueryClient()
   const isSubmittingRef = useRef(false)
 
   // Fetch patient data
-  const { data: patient, isLoading, isError } = useQuery({
-    queryKey: ['patient', patientId],
+  const { data: patient, isLoading, isError, refetch: refetchPatient } = useQuery({
+    queryKey: queryKeys.patients.detail(patientId),
     queryFn: async () => {
       const { data } = await axios.get<{ data: Patient }>(`/patients/${patientId}`)
       return data.data
@@ -38,6 +40,17 @@ export default function EditPatientPage() {
     try {
       await axios.put(`/patients/${patientId}`, patientData)
       toast.success('تم تحديث بيانات المريض بنجاح ✅')
+      
+      // Invalidate all patient-related queries to ensure updates are reflected everywhere
+      queryClient.invalidateQueries({ queryKey: ['patients'] }) // Invalidate paginated queries
+      queryClient.invalidateQueries({ queryKey: ['form-data', 'patients'] }) // Invalidate form data cache
+      queryClient.invalidateQueries({ queryKey: queryKeys.patients.detail(patientId) }) // Invalidate patient detail
+      // Force refetch of ALL queries (not just active) to immediately update the UI for all users
+      queryClient.refetchQueries({ queryKey: ['patients'], type: 'all' })
+      queryClient.refetchQueries({ queryKey: ['form-data', 'patients'], type: 'all' })
+      // Refetch the current patient detail
+      refetchPatient()
+      
       router.push(`/patients/${patientId}`)
     } catch (error: unknown) {
       const errorMessage = 

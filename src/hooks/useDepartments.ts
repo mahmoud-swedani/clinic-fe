@@ -24,7 +24,16 @@ export function useDepartments() {
       return data // Return full PaginatedResponse
     },
     enabled: !!branchId && !userLoading,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - departments don't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
     placeholderData: keepPreviousData,
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }

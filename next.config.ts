@@ -1,6 +1,25 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Enable experimental features for better performance
+  experimental: {
+    // Optimize package imports
+    optimizePackageImports: [
+      'react-big-calendar',
+      'lucide-react',
+      '@radix-ui/react-dialog',
+      '@radix-ui/react-select',
+      '@tanstack/react-query',
+    ],
+  },
+  // Turbopack configuration (when using --turbo flag)
+  // Turbopack is zero-configuration by default
+  // This config is defined to satisfy the warning about webpack being configured
+  // Turbopack automatically handles CSS, source maps, and module resolution
+  turbopack: {
+    // Turbopack handles everything automatically - no additional config needed
+    // The webpack config above is only used when NOT using Turbopack
+  },
   images: {
     remotePatterns: [
       {
@@ -9,6 +28,7 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  // Webpack config (only used when NOT using Turbopack)
   webpack: (config, { isServer, dev }) => {
     // Suppress warnings about outdated JSX transform from dependencies
     config.ignoreWarnings = [

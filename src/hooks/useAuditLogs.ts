@@ -15,7 +15,8 @@ export function useAuditLogs(
     endDate?: string
   },
   page?: number,
-  limit?: number
+  limit?: number,
+  enabled?: boolean
 ) {
   const currentPage = page || 1
   const currentLimit = limit || 50
@@ -39,8 +40,17 @@ export function useAuditLogs(
       )
       return data
     },
+    enabled: enabled !== false, // Default to true if not specified
     staleTime: 2 * 60 * 1000, // 2 minutes
     placeholderData: keepPreviousData,
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 403 (Forbidden) errors
+      if (error?.response?.status === 403) {
+        return false
+      }
+      return failureCount < 2
+    },
+    throwOnError: false, // Don't throw errors to prevent breaking the UI
   })
 }
 

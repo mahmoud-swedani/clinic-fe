@@ -1,6 +1,6 @@
 'use client'
 
-import React, { useState, useMemo, useEffect } from 'react'
+import React, { useState, useMemo, useEffect, useRef } from 'react'
 import { usePatientDetails } from '@/hooks/usePatientDetails'
 import { usePatientAppointments } from '@/hooks/usePatientAppointments'
 import { useUserPermissions } from '@/hooks/usePermissions'
@@ -16,6 +16,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 import { cn } from '@/lib/utils'
+import { TreatmentStageEditForm } from '@/components/treatment-stages/treatment-stage-edit-form'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog'
 
 type PatientDetailsClientProps = {
   id: string
@@ -32,11 +40,15 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
     canViewPatientActivities,
     hasPermission,
   } = useUserPermissions()
+  const canEditStage = hasPermission('treatment-stages.edit')
   const [search, setSearch] = useState('')
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all')
   const [showCompleted, setShowCompleted] = useState<
     'all' | 'completed' | 'pending'
   >('all')
+  const [openEditStage, setOpenEditStage] = useState(false)
+  const [selectedStage, setSelectedStage] = useState<TreatmentStage | null>(null)
+  const { refetch: refetchPatientDetails } = usePatientDetails(id)
   
   // Determine available tabs based on permissions
   const availableTabs = useMemo(() => {
@@ -408,6 +420,21 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
                           {stage.title}
                         </h3>
                         <div className='flex items-center space-x-2 rtl:space-x-reverse'>
+                          {canEditStage && (
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setSelectedStage(stage)
+                                setOpenEditStage(true)
+                              }}
+                              className='h-8 w-8 p-0'
+                              title='تعديل المرحلة'
+                            >
+                              <Pencil className='w-4 h-4' />
+                            </Button>
+                          )}
                           {stage.isCompleted ? (
                             <CheckCircle2 className='text-green-600 w-6 h-6' />
                           ) : (
@@ -566,6 +593,32 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
       {canViewPatientActivities && (
         <PatientActivities patientId={id} />
       )}
+
+      {/* Edit Stage Dialog */}
+      {canEditStage && (
+        <Dialog open={openEditStage} onOpenChange={setOpenEditStage}>
+          <DialogContent className='max-w-2xl' dir='rtl'>
+            <DialogHeader>
+              <DialogTitle>تعديل المرحلة العلاجية</DialogTitle>
+              <DialogDescription>قم بتعديل بيانات المرحلة العلاجية</DialogDescription>
+            </DialogHeader>
+            {selectedStage && (
+              <TreatmentStageEditForm
+                stage={selectedStage}
+                onSuccess={() => {
+                  setOpenEditStage(false)
+                  setSelectedStage(null)
+                  refetchPatientDetails()
+                }}
+                onCancel={() => {
+                  setOpenEditStage(false)
+                  setSelectedStage(null)
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </section>
   )
 }
@@ -577,23 +630,40 @@ const AppointmentCard: React.FC<{
 }> = ({ appointment, canViewTreatmentStages }) => {
   const [treatmentStages, setTreatmentStages] = useState<TreatmentStage[]>([])
   const [loadingStages, setLoadingStages] = useState(false)
+  const [openEditStage, setOpenEditStage] = useState(false)
+  const [selectedStage, setSelectedStage] = useState<TreatmentStage | null>(null)
+  const hasLoadedRef = useRef(false)
+  const { hasPermission } = useUserPermissions()
+  const canEditStage = hasPermission('treatment-stages.edit')
 
-  const loadTreatmentStages = async () => {
+  const loadTreatmentStages = async (loadFullData = false) => {
     if (!canViewTreatmentStages) return
-    // Only load if not already loaded
-    if (treatmentStages.length > 0 || loadingStages) return
+    // Only load if not already loaded (unless we're forcing a reload)
+    if (hasLoadedRef.current && !loadFullData) return
     
     setLoadingStages(true)
     try {
       const { data } = await axios.get(`/treatment-stages/appointment/${appointment._id}`)
       setTreatmentStages((data?.data || []) as TreatmentStage[])
+      hasLoadedRef.current = true
     } catch (error) {
       console.error('Error loading treatment stages:', error)
       setTreatmentStages([])
+      hasLoadedRef.current = true // Mark as loaded even on error to prevent infinite retries
     } finally {
       setLoadingStages(false)
     }
   }
+
+  // Load treatment stages count on mount
+  useEffect(() => {
+    // Reset ref when appointment changes
+    hasLoadedRef.current = false
+    if (canViewTreatmentStages) {
+      loadTreatmentStages()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [appointment._id, canViewTreatmentStages])
 
   const doctorName =
     typeof appointment.doctor === 'object' && appointment.doctor !== null
@@ -664,7 +734,7 @@ const AppointmentCard: React.FC<{
         {canViewTreatmentStages && (
           <Accordion type='single' collapsible className='w-full'>
             <AccordionItem value='treatment-stages'>
-              <AccordionTrigger onClick={loadTreatmentStages}>
+              <AccordionTrigger>
                 المراحل العلاجية ({treatmentStages.length})
               </AccordionTrigger>
               <AccordionContent>
@@ -690,11 +760,28 @@ const AppointmentCard: React.FC<{
                       >
                         <div className='flex justify-between items-start mb-2'>
                           <h4 className='font-semibold text-gray-800'>{stage.title}</h4>
-                          {stage.isCompleted ? (
-                            <CheckCircle2 className='text-green-600 w-5 h-5' />
-                          ) : (
-                            <XCircle className='text-red-600 w-5 h-5' />
-                          )}
+                          <div className='flex items-center gap-2'>
+                            {canEditStage && (
+                              <Button
+                                variant='ghost'
+                                size='sm'
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedStage(stage)
+                                  setOpenEditStage(true)
+                                }}
+                                className='h-7 w-7 p-0'
+                                title='تعديل المرحلة'
+                              >
+                                <Pencil className='w-3 h-3' />
+                              </Button>
+                            )}
+                            {stage.isCompleted ? (
+                              <CheckCircle2 className='text-green-600 w-5 h-5' />
+                            ) : (
+                              <XCircle className='text-red-600 w-5 h-5' />
+                            )}
+                          </div>
                         </div>
                         {stage.description && (
                           <p className='text-sm text-gray-700 mb-2'>{stage.description}</p>
@@ -722,6 +809,33 @@ const AppointmentCard: React.FC<{
           </Accordion>
         )}
       </CardContent>
+
+      {/* Edit Stage Dialog for AppointmentCard */}
+      {canEditStage && (
+        <Dialog open={openEditStage} onOpenChange={setOpenEditStage}>
+          <DialogContent className='max-w-2xl' dir='rtl'>
+            <DialogHeader>
+              <DialogTitle>تعديل المرحلة العلاجية</DialogTitle>
+              <DialogDescription>قم بتعديل بيانات المرحلة العلاجية</DialogDescription>
+            </DialogHeader>
+            {selectedStage && (
+              <TreatmentStageEditForm
+                stage={selectedStage}
+                onSuccess={() => {
+                  setOpenEditStage(false)
+                  setSelectedStage(null)
+                  hasLoadedRef.current = false // Reset to allow reload
+                  loadTreatmentStages(true) // Force reload stages
+                }}
+                onCancel={() => {
+                  setOpenEditStage(false)
+                  setSelectedStage(null)
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
   )
 }

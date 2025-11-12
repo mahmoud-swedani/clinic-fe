@@ -9,35 +9,45 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 import axios from '@/lib/axios'
 import { deleteCookie } from 'cookies-next'
 import { useQueryClient } from '@tanstack/react-query'
+import { useTransition, useState } from 'react'
 
 export default function Navbar() {
   const router = useRouter()
   const queryClient = useQueryClient()
   const { data: user, isLoading } = useCurrentUser()
+  const [isPending, startTransition] = useTransition()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLogout = async () => {
+    setIsLoggingOut(true)
     try {
-      // محاولة تسجيل الخروج من الخادم (سيحذف httpOnly cookie)
-      await axios.post('/auth/logout').catch(() => {
-        // إذا فشل، لا مشكلة - سنحذف التوكن محليًا على أي حال
+      // Clear cache first for immediate UI update (optimistic logout)
+      queryClient.clear()
+      deleteCookie('token')
+
+      // Attempt to logout from server (will delete httpOnly cookie)
+      // Don't wait for this - do it in background for faster logout
+      axios.post('/auth/logout').catch(() => {
+        // If it fails, no problem - we've already cleared local state
       })
 
-      // حذف التوكن من الكوكيز (إذا كان موجودًا كـ non-httpOnly cookie)
-      deleteCookie('token')
+      // Prefetch login page for faster navigation
+      router.prefetch('/login')
 
-      // إلغاء تفعيل جميع الاستعلامات في React Query
-      queryClient.clear()
-
-      // إعادة التوجيه لصفحة تسجيل الدخول
-      router.push('/login')
-      router.refresh() // تحديث الصفحة للتأكد من إزالة الحالة
+      // Redirect immediately using transition for smoother navigation
+      startTransition(() => {
+        router.replace('/login')
+      })
     } catch (error) {
       console.error('خطأ أثناء تسجيل الخروج', error)
-      // حتى لو فشل، احذف التوكن من الكوكيز
+      // Even if error, clear everything and redirect
       deleteCookie('token')
       queryClient.clear()
-      router.push('/login')
-      router.refresh()
+      startTransition(() => {
+        router.replace('/login')
+      })
+    } finally {
+      setIsLoggingOut(false)
     }
   }
 
@@ -61,8 +71,12 @@ export default function Navbar() {
       {!isLoading && user ? (
         <div className='flex items-center gap-2'>
           <span className='text-sm text-gray-600'>مرحبًا، {user.name}</span>
-          <Button variant='outline' onClick={handleLogout}>
-            تسجيل الخروج
+          <Button 
+            variant='outline' 
+            onClick={handleLogout}
+            disabled={isLoggingOut || isPending}
+          >
+            {isLoggingOut || isPending ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
           </Button>
         </div>
       ) : (

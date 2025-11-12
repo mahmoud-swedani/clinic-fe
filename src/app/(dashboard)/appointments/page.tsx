@@ -1,16 +1,24 @@
 'use client'
 
-import React, { useEffect, useState, useMemo, useCallback, Suspense } from 'react'
+import React, { useState, useMemo, useCallback, Suspense, useEffect } from 'react'
 import { useAppointments } from '@/hooks/useAppointments'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { useUserPermissions } from '@/hooks/usePermissions'
+import { useAllFormData } from '@/hooks/useFormData'
 import { AppointmentForm } from '@/components/appointments/appointment-form'
 import { TreatmentStageForm } from '@/components/treatment-stages/treatment-stage-form'
 
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import { Input } from '@/components/ui/input'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import {
   Select,
   SelectTrigger,
@@ -32,37 +40,46 @@ import { ClipboardPlus, CalendarDays, List, Pencil } from 'lucide-react'
 import { format } from 'date-fns'
 import { arSA } from 'date-fns/locale'
 
-import { Calendar, momentLocalizer, View } from 'react-big-calendar'
+// Lazy load react-big-calendar to improve initial compilation time
+import dynamic from 'next/dynamic'
 import moment from 'moment'
-import 'react-big-calendar/lib/css/react-big-calendar.css'
-import axios from '@/lib/axios'
-import { isAxiosError } from 'axios'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import { usePagination } from '@/hooks/usePagination'
 import { Pagination } from '@/components/ui/Pagination'
-import { Patient, User, Service, Department, Appointment, PaginatedResponse } from '@/types/api'
+import { Patient, User, Appointment, PaginatedResponse } from '@/types/api'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useQueryClient } from '@tanstack/react-query'
 
 moment.locale('ar')
-const localizer = momentLocalizer(moment)
+
+// Dynamically import the calendar component (lazy load to reduce initial bundle)
+// This significantly improves compilation time for the appointments page
+const Calendar = dynamic(
+  () => import('react-big-calendar').then(async (mod) => {
+    // Import CSS when calendar is loaded
+    if (typeof window !== 'undefined') {
+      await import('react-big-calendar/lib/css/react-big-calendar.css')
+    }
+    return mod.Calendar
+  }),
+  { 
+    ssr: false,
+    loading: () => <div className="h-96 flex items-center justify-center">جاري تحميل التقويم...</div>
+  }
+)
+
+// View type for react-big-calendar (includes all possible view values)
+type CalendarView = 'month' | 'week' | 'work_week' | 'day' | 'agenda'
 
 function AppointmentsContent() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { page, limit, goToPage, changeLimit } = usePagination(10)
-  const { data: appointments, isLoading, isError, refetch } = useAppointments()
-  const { data: user, isLoading: userLoading } = useCurrentUser()
-  const { canManageAppointments, canAddTreatmentStageFromAppointment, permissions, role } = useUserPermissions()
-
-  // Debug: Log permissions to console
-  console.log('=== APPOINTMENTS PAGE DEBUG ===')
-  console.log('User:', user)
-  console.log('User roleId:', user?.roleId)
-  console.log('User role:', role)
-  console.log('User permissions:', permissions)
-  console.log('canManageAppointments:', canManageAppointments)
-  console.log('Has appointments.create:', permissions?.includes('appointments.create'))
-  console.log('Has appointments.edit:', permissions?.includes('appointments.edit'))
+  const { data: appointments, isLoading, isError, refetch } = useAppointments(page, limit)
+  const { data: user } = useCurrentUser()
+  const { canManageAppointments, canAddTreatmentStageFromAppointment } = useUserPermissions()
   
   const typedAppointments = appointments as PaginatedResponse<Appointment> | undefined
   const paginationMeta = typedAppointments?.pagination
@@ -74,10 +91,11 @@ function AppointmentsContent() {
       }
     : { page, limit, total: 0, totalPages: 0 }
 
-  const [patients, setPatients] = useState<Patient[]>([])
-  const [doctors, setDoctors] = useState<User[]>([])
-  const [services, setServices] = useState<Service[]>([])
-  const [departments, setDepartments] = useState<Department[]>([])
+  // Use cached form data hook instead of manual fetching
+  const branchId = user?.branch 
+    ? (typeof user.branch === 'string' ? user.branch : user.branch._id)
+    : undefined
+  const { patients, doctors, services, departments } = useAllFormData(branchId)
 
   const [openAddStage, setOpenAddStage] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -90,52 +108,29 @@ function AppointmentsContent() {
   const [status, setStatus] = useState('')
   const [department, setDepartment] = useState('all') // قيمة افتراضية "all" = الكل
 
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    if (page !== 1) {
+      goToPage(1)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [search, date, type, status, department])
+
   const [viewMode, setViewMode] = useState<'list' | 'calendar'>('list')
 
   const [calendarDate, setCalendarDate] = useState(new Date())
-  const [calendarView, setCalendarView] = useState<View>('month')
+  const [calendarView, setCalendarView] = useState<CalendarView>('month')
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [localizer, setLocalizer] = useState<any>(null)
 
+  // Initialize localizer when component mounts
   useEffect(() => {
-    async function fetchData() {
-      try {
-        const [patientsRes, doctorsRes, servicesRes, departmentsRes] =
-          await Promise.all([
-            axios.get('/patients'),
-            axios.get('/user-roles/doctors'),
-            axios.get('/services'),
-            axios.get('/departments', {
-              params: {
-                branchId: (() => {
-                  if (!user?.branch) return undefined
-                  return typeof user.branch === 'string' ? user.branch : user.branch._id
-                })(),
-              },
-            }),
-          ])
-        // Extract data arrays from responses
-        // Note: /user-roles/doctors returns { success: true, data: [...] } directly, not paginated
-        setPatients(patientsRes.data?.data || patientsRes.data || [])
-        setDoctors(doctorsRes.data?.data || doctorsRes.data || [])
-        setServices(servicesRes.data?.data || servicesRes.data || [])
-        setDepartments(departmentsRes.data?.data || departmentsRes.data || [])
-      } catch (error) {
-        if (isAxiosError(error) && error.response) {
-          console.error(
-            'API error:',
-            error.response.status,
-            '-',
-            error.response.data?.message || error.response.data
-          )
-        } else {
-          console.error('Error fetching data', error)
-        }
-      }
+    if (typeof window !== 'undefined' && !localizer) {
+      import('react-big-calendar').then((mod) => {
+        setLocalizer(mod.momentLocalizer(moment))
+      })
     }
-
-    if (user?.branch && !userLoading) {
-      fetchData()
-    }
-  }, [user, userLoading])
+  }, [localizer])
 
   const filteredAppointments = useMemo(() => {
     const appointmentsList = typedAppointments?.data || []
@@ -171,8 +166,8 @@ function AppointmentsContent() {
     setCalendarDate(newDate)
   }, [])
 
-  const handleViewChange = useCallback((newView: View) => {
-    setCalendarView(newView)
+  const handleViewChange = useCallback((newView: string) => {
+    setCalendarView(newView as CalendarView)
   }, [])
 
   // Helper function to extract ID from patient/doctor (string or object)
@@ -273,6 +268,12 @@ function AppointmentsContent() {
                 departments={departments}
                 initialData={editingAppointment}
                 onSuccess={() => {
+                  // Invalidate all appointment queries to ensure updates are reflected everywhere
+                  queryClient.invalidateQueries({ queryKey: ['appointments'] })
+                  queryClient.invalidateQueries({ queryKey: ['appointments', 'all-shared'] })
+                  // Force refetch of ALL queries (not just active) to immediately update the UI for all users
+                  // This ensures other users see changes immediately, not just when their query becomes active
+                  queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
                   refetch()
                   setOpenForm(false)
                   setEditingAppointment(null)
@@ -337,142 +338,173 @@ function AppointmentsContent() {
       {/* عرض النتائج */}
       {viewMode === 'list' ? (
         <>
-          <ScrollArea className='h-[500px] pr-2'>
-            {filteredAppointments.length === 0 ? (
-              <p className='text-center text-gray-500 mt-6 text-lg'>
-                لا توجد نتائج مطابقة.
-              </p>
-            ) : (
-              <div className='grid gap-4 mt-4'>
-                {filteredAppointments.map((appt: Appointment) => (
-                  <Card
-                    key={appt._id}
-                    className='border-l-4 border-primary cursor-pointer hover:shadow-lg transition-shadow'
-                    onClick={(e) => {
-                      // Don't navigate if dialog is open for this appointment
-                      if (openAddStage && selectedAppointment && selectedAppointment._id === appt._id) {
-                        e.stopPropagation()
-                        return
-                      }
-                      router.push(`/appointments/${appt._id}`)
-                    }}
-                  >
-                    <CardContent className='p-4 space-y-3'>
-                      <div className='flex flex-col md:flex-row justify-between'>
-                        <div>
-                          <h2 className='text-lg font-semibold'>{appt.type}</h2>
-                          <p>
-                            <strong>الطبيب:</strong>{' '}
-                          {typeof appt.doctor === 'object' && appt.doctor !== null
-                            ? appt.doctor.name
-                            : '-'}
-                          </p>
-                          <p>
-                            <strong>المريض:</strong>{' '}
-                            {typeof appt.patient === 'object' && appt.patient !== null
-                              ? appt.patient.fullName
+          {isLoading ? (
+            <div className='flex justify-center items-center h-48 text-gray-600 text-lg'>
+              جاري التحميل...
+            </div>
+          ) : filteredAppointments.length === 0 ? (
+            <p className='text-center text-gray-500 mt-6 text-lg'>
+              لا توجد نتائج مطابقة.
+            </p>
+          ) : (
+            <Card>
+              <CardContent className='p-0'>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className='text-right'>نوع الكشف</TableHead>
+                      <TableHead className='text-right'>المريض</TableHead>
+                      <TableHead className='text-right'>الطبيب</TableHead>
+                      <TableHead className='text-right'>القسم</TableHead>
+                      <TableHead className='text-right'>التاريخ والوقت</TableHead>
+                      <TableHead className='text-right'>الحالة</TableHead>
+                      <TableHead className='text-right'>الإجراءات</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredAppointments.map((appt: Appointment) => {
+                      const patient = typeof appt.patient === 'object' && appt.patient !== null
+                        ? appt.patient
+                        : null
+                      const doctor = typeof appt.doctor === 'object' && appt.doctor !== null
+                        ? appt.doctor
+                        : null
+                      const departmentObj = typeof appt.departmentId === 'object' && appt.departmentId !== null
+                        ? appt.departmentId
+                        : null
+
+                      return (
+                        <TableRow
+                          key={appt._id}
+                          className='cursor-pointer hover:bg-gray-50 transition-colors'
+                          onClick={(e) => {
+                            // Don't navigate if clicking on action buttons
+                            if ((e.target as HTMLElement).closest('button')) {
+                              return
+                            }
+                            router.push(`/appointments/${appt._id}`)
+                          }}
+                        >
+                          <TableCell className='font-medium'>{appt.type || '-'}</TableCell>
+                          <TableCell>
+                            {patient ? (
+                              <Link
+                                href={`/patients/${patient._id || patient}`}
+                                className='text-blue-600 hover:underline font-medium'
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {patient.fullName || '-'}
+                              </Link>
+                            ) : (
+                              '-'
+                            )}
+                          </TableCell>
+                          <TableCell>{doctor?.name || '-'}</TableCell>
+                          <TableCell>
+                            {departmentObj && typeof departmentObj === 'object' && 'name' in departmentObj
+                              ? departmentObj.name
                               : '-'}
-                          </p>
-                          <p>
-                            <strong>الوقت:</strong>{' '}
+                          </TableCell>
+                          <TableCell>
                             {appt.date
                               ? format(new Date(appt.date), 'yyyy-MM-dd HH:mm', {
                                   locale: arSA,
                                 })
                               : '-'}
-                          </p>
-                        </div>
-                        <div className='flex flex-col gap-2 items-end'>
-                          <div className='flex gap-2'>
-                            {canManageAppointments && (
-                              <Button
-                                variant='outline'
-                                size='sm'
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  setEditingAppointment(appt)
-                                  setOpenForm(true)
-                                }}
-                              >
-                                <Pencil className='w-4 h-4' />
-                                تعديل
-                              </Button>
-                            )}
-                            {canAddTreatmentStageFromAppointment && (
-                              <Dialog
-                                open={
-                                  openAddStage && selectedAppointment !== null && selectedAppointment._id === appt._id
-                                }
-                                onOpenChange={(open) => {
-                                  if (!open) {
-                                    setOpenAddStage(false)
-                                    setSelectedAppointment(null)
-                                  }
-                                }}
-                              >
-                                <DialogTrigger asChild>
-                                  <Button
-                                    variant='outline'
-                                    size='sm'
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      openStageDialog(appt)
-                                    }}
-                                  >
-                                    <ClipboardPlus className='w-4 h-4' />
-                                    إضافة مرحلة علاج
-                                  </Button>
-                                </DialogTrigger>
-                            {openAddStage && selectedAppointment && selectedAppointment._id === appt._id && (
-                              <DialogContent 
-                                className='max-w-lg' 
-                                dir='rtl'
-                                onClick={(e) => e.stopPropagation()}
-                                onPointerDown={(e) => e.stopPropagation()}
-                              >
-                                <DialogHeader>
-                                  <DialogTitle>إضافة مرحلة علاجية</DialogTitle>
-                                  <DialogDescription>
-                                    أضف مرحلة علاجية جديدة للموعد
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <TreatmentStageForm
-                                  appointmentId={selectedAppointment._id}
-                                  patientId={extractId(selectedAppointment.patient)}
-                                  doctorId={extractId(selectedAppointment.doctor)}
-                                  onSuccess={() => {
-                                    setOpenAddStage(false)
-                                    setSelectedAppointment(null)
-                                    refetch()
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                appt.status === 'تم'
+                                  ? 'default'
+                                  : appt.status === 'ملغي'
+                                  ? 'destructive'
+                                  : 'outline'
+                              }
+                            >
+                              {appt.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className='flex gap-2' onClick={(e) => e.stopPropagation()}>
+                              {canManageAppointments && (
+                                <Button
+                                  variant='outline'
+                                  size='sm'
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    setEditingAppointment(appt)
+                                    setOpenForm(true)
                                   }}
-                                />
-                              </DialogContent>
-                            )}
-                            </Dialog>
-                            )}
-                          </div>
-
-                          <Badge
-                            variant={
-                              appt.status === 'تم'
-                                ? 'default'
-                                : appt.status === 'ملغي'
-                                ? 'destructive'
-                                : 'outline'
-                            }
-                          >
-                            {appt.status}
-                          </Badge>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            )}
-          </ScrollArea>
+                                >
+                                  <Pencil className='w-4 h-4' />
+                                  تعديل
+                                </Button>
+                              )}
+                              {canAddTreatmentStageFromAppointment && (
+                                <Dialog
+                                  open={
+                                    openAddStage && selectedAppointment !== null && selectedAppointment._id === appt._id
+                                  }
+                                  onOpenChange={(open) => {
+                                    if (!open) {
+                                      setOpenAddStage(false)
+                                      setSelectedAppointment(null)
+                                    }
+                                  }}
+                                >
+                                  <DialogTrigger asChild>
+                                    <Button
+                                      variant='outline'
+                                      size='sm'
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        openStageDialog(appt)
+                                      }}
+                                    >
+                                      <ClipboardPlus className='w-4 h-4' />
+                                      إضافة مرحلة
+                                    </Button>
+                                  </DialogTrigger>
+                                  {openAddStage && selectedAppointment && selectedAppointment._id === appt._id && (
+                                    <DialogContent 
+                                      className='max-w-lg' 
+                                      dir='rtl'
+                                      onClick={(e) => e.stopPropagation()}
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                    >
+                                      <DialogHeader>
+                                        <DialogTitle>إضافة مرحلة علاجية</DialogTitle>
+                                        <DialogDescription>
+                                          أضف مرحلة علاجية جديدة للموعد
+                                        </DialogDescription>
+                                      </DialogHeader>
+                                      <TreatmentStageForm
+                                        appointmentId={selectedAppointment._id}
+                                        patientId={extractId(selectedAppointment.patient)}
+                                        doctorId={extractId(selectedAppointment.doctor)}
+                                        onSuccess={() => {
+                                          setOpenAddStage(false)
+                                          setSelectedAppointment(null)
+                                          refetch()
+                                        }}
+                                      />
+                                    </DialogContent>
+                                  )}
+                                </Dialog>
+                              )}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </CardContent>
+            </Card>
+          )}
           {/* Pagination for list view */}
-          {paginationMeta.totalPages > 1 && (
+          {!isLoading && paginationMeta.totalPages > 1 && (
             <Pagination
               meta={paginationMeta}
               onPageChange={goToPage}
@@ -480,6 +512,10 @@ function AppointmentsContent() {
             />
           )}
         </>
+      ) : !localizer ? (
+        <div className="h-[600px] flex items-center justify-center">
+          <div>جاري تحميل التقويم...</div>
+        </div>
       ) : (
         <div className='h-[600px]'>
           <Calendar
@@ -497,8 +533,8 @@ function AppointmentsContent() {
                   resource: appt,
                 }
               })}
-            startAccessor='start'
-            endAccessor='end'
+            startAccessor={(event: object) => (event as { start: Date }).start}
+            endAccessor={(event: object) => (event as { end: Date }).end}
             style={{ height: '100%' }}
             onNavigate={handleNavigate}
             onView={handleViewChange}
@@ -516,7 +552,7 @@ function AppointmentsContent() {
               noEventsInRange: 'لا توجد أحداث في هذا النطاق',
               showMore: (count) => `+${count} أكثر`,
             }}
-            onSelectEvent={(event) => router.push(`/appointments/${event.id}`)}
+            onSelectEvent={(event) => router.push(`/appointments/${(event as { id: string }).id}`)}
           />
         </div>
       )}

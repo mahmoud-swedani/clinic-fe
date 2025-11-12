@@ -3,81 +3,68 @@ import { useQuery } from '@tanstack/react-query'
 import { useCurrentUser } from './useCurrentUser'
 import axios from '@/lib/axios'
 import { PaginatedResponse, Appointment, TreatmentStage } from '@/types/api'
-import { startOfToday, endOfToday, addDays, isWithinInterval } from 'date-fns'
+import { startOfToday, addDays, subWeeks } from 'date-fns'
+import { useTodayAppointments as useTodayAppointmentsShared, useAppointmentsByDateRange } from './useAppointments'
 
-/**
- * Hook to get all appointments for the current doctor (backend filters by doctor)
- * Then filters client-side for today's appointments
- */
-export function useTodayAppointments() {
-  const { data: user } = useCurrentUser()
-  const doctorId = user?._id
-
-  return useQuery({
-    queryKey: ['appointments', 'doctor', doctorId],
-    queryFn: async () => {
-      // Backend already filters by doctor when role is 'طبيب'
-      const { data } = await axios.get<PaginatedResponse<Appointment>>('/appointments', {
-        params: {
-          page: 1,
-          limit: 100, // Get enough to filter
-        },
-      })
-      const appointments = data.data || []
-      
-      // Filter for today's appointments
-      const today = startOfToday()
-      const endOfDay = endOfToday()
-      return appointments.filter((apt: Appointment) => {
-        if (!apt.date) return false
-        const aptDate = new Date(apt.date)
-        return isWithinInterval(aptDate, { start: today, end: endOfDay })
-      })
-    },
-    enabled: !!doctorId && user?.role === 'طبيب',
-    staleTime: 1 * 60 * 1000, // 1 minute (frequent updates for schedule)
-  })
+// Helper to check if user is a doctor
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function isDoctor(user: any): boolean {
+  if (!user) return false
+  // Check role enum
+  if (user.role === 'طبيب') return true
+  // Check roleId if it's populated
+  if (typeof user.roleId === 'object' && user.roleId !== null && user.roleId.name === 'طبيب') {
+    return true
+  }
+  return false
 }
 
 /**
- * Hook to get upcoming appointments (next 7 days) for the current doctor
+ * Hook to get today's appointments for the current doctor
+ * Uses backend date filter for efficiency
+ */
+export function useTodayAppointments() {
+  const { data: user } = useCurrentUser()
+  const doctorId = user?._id || user?.id
+
+  // Use the shared hook with doctor filter
+  return useTodayAppointmentsShared({ doctorId: doctorId as string })
+}
+
+/**
+ * Hook to get all upcoming appointments (future dates) for the current doctor
+ * Uses backend date filter for efficiency
  */
 export function useUpcomingAppointments() {
   const { data: user } = useCurrentUser()
-  const doctorId = user?._id
+  const doctorId = user?._id || user?.id
+  const today = startOfToday()
+  const futureDate = addDays(today, 30) // Next 30 days
 
-  return useQuery({
-    queryKey: ['appointments', 'doctor', 'upcoming', doctorId],
-    queryFn: async () => {
-      // Backend already filters by doctor when role is 'طبيب'
-      const { data } = await axios.get<PaginatedResponse<Appointment>>('/appointments', {
-        params: {
-          page: 1,
-          limit: 100, // Get enough to filter
-        },
-      })
-      const appointments = data.data || []
-      
-      // Filter for upcoming appointments (next 7 days)
-      const today = startOfToday()
-      const endDate = addDays(today, 7)
-      return appointments.filter((apt: Appointment) => {
-        if (!apt.date) return false
-        const aptDate = new Date(apt.date)
-        return isWithinInterval(aptDate, { start: today, end: endDate })
-      })
-    },
-    enabled: !!doctorId && user?.role === 'طبيب',
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  })
+  // Use the shared hook with date range and doctor filter
+  return useAppointmentsByDateRange(today, futureDate, { doctorId: doctorId as string })
+}
+
+/**
+ * Hook to get past appointments (last 3 weeks) for the current doctor
+ * Uses backend date filter for efficiency
+ */
+export function usePastAppointments() {
+  const { data: user } = useCurrentUser()
+  const doctorId = user?._id || user?.id
+  const today = startOfToday()
+  const threeWeeksAgo = subWeeks(today, 3)
+
+  // Use the shared hook with date range and doctor filter
+  return useAppointmentsByDateRange(threeWeeksAgo, today, { doctorId: doctorId as string })
 }
 
 /**
  * Hook to get patient statistics for the current doctor
  */
 export function useDoctorPatientStats() {
-  const { data: user } = useCurrentUser()
-  const doctorId = user?._id
+  const { data: user, isLoading: userLoading } = useCurrentUser()
+  const doctorId = user?._id || user?.id
 
   return useQuery({
     queryKey: ['doctor', 'patient-stats', doctorId],
@@ -104,16 +91,16 @@ export function useDoctorPatientStats() {
       )
 
       // Get treatment stages for this doctor
-      // Note: Backend might need to filter by doctor, but for now we'll get all and filter client-side
-      const { data: stagesData } = await axios.get('/treatment-stages', {
+      // Backend filters by doctor when role is 'طبيب'
+      const { data: stagesData } = await axios.get<PaginatedResponse<TreatmentStage>>('/treatment-stages', {
         params: {
           page: 1,
           limit: 1000,
         },
       })
 
-      const stages = (stagesData.data?.data || stagesData.data || []) as TreatmentStage[]
-      // Filter stages by doctor if available
+      const stages = stagesData.data || []
+      // Filter stages by doctor if available (backend should already filter, but double-check)
       const doctorStages = stages.filter(
         (stage: TreatmentStage) => {
           const doctor = stage.doctor
@@ -138,7 +125,7 @@ export function useDoctorPatientStats() {
         completionRate: Math.round(completionRate * 100) / 100,
       }
     },
-    enabled: !!doctorId && user?.role === 'طبيب',
+    enabled: !!doctorId && !userLoading && isDoctor(user),
     staleTime: 5 * 60 * 1000, // 5 minutes
   })
 }

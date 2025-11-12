@@ -12,6 +12,14 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useUserPermissions } from '@/hooks/usePermissions'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Department, PaginatedResponse } from '@/types/api'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 
 function DepartmentsContent() {
   const { isLoading: loadingUser } = useCurrentUser()
@@ -74,69 +82,67 @@ function DepartmentsContent() {
               لا توجد أقسام حاليًا لهذا الفرع.
             </p>
           ) : (
-            <div className='overflow-x-auto'>
-              <table className='w-full text-sm text-right'>
-                <thead>
-                  <tr className='border-b bg-gray-100'>
-                    <th className='px-4 py-3 font-semibold'>اسم القسم</th>
-                    <th className='px-4 py-3 font-semibold'>الوصف</th>
-                    <th className='px-4 py-3 font-semibold'>الفرع</th>
-                    <th className='px-4 py-3 font-semibold'>الإجراءات</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {departments.map((dept: Department) => (
-                    <tr
-                      key={dept._id}
-                      className='border-b hover:bg-gray-50 transition-colors'
-                    >
-                      <td className='px-4 py-3'>
-                        <Link
-                          href={`/departments/${dept._id}`}
-                          className='text-blue-600 hover:underline font-medium'
-                        >
-                          {dept.name}
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className='text-right'>اسم القسم</TableHead>
+                  <TableHead className='text-right'>الوصف</TableHead>
+                  <TableHead className='text-right'>الفرع</TableHead>
+                  <TableHead className='text-right'>الإجراءات</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {departments.map((dept: Department) => (
+                  <TableRow
+                    key={dept._id}
+                    className='hover:bg-gray-50 transition-colors'
+                  >
+                    <TableCell>
+                      <Link
+                        href={`/departments/${dept._id}`}
+                        className='text-blue-600 hover:underline font-medium'
+                      >
+                        {dept.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className='text-gray-600 max-w-xs truncate'>
+                      {dept.description || '-'}
+                    </TableCell>
+                    <TableCell>
+                      {typeof dept.branch === 'object' && dept.branch !== null
+                        ? dept.branch.name
+                        : dept.branch || '-'}
+                    </TableCell>
+                    <TableCell>
+                      <div className='flex gap-2'>
+                        <Link href={`/departments/${dept._id}`}>
+                          <Button
+                            variant='outline'
+                            size='sm'
+                            aria-label={`عرض تفاصيل قسم ${dept.name}`}
+                          >
+                            <Eye className='w-4 h-4 mr-1' aria-hidden='true' />
+                            تفاصيل
+                          </Button>
                         </Link>
-                      </td>
-                      <td className='px-4 py-3 text-gray-600 max-w-xs truncate'>
-                        {dept.description || '-'}
-                      </td>
-                      <td className='px-4 py-3'>
-                        {typeof dept.branch === 'object' && dept.branch !== null
-                          ? dept.branch.name
-                          : dept.branch || '-'}
-                      </td>
-                      <td className='px-4 py-3'>
-                        <div className='flex gap-2'>
-                          <Link href={`/departments/${dept._id}`}>
+                        {canManageDepartments && (
+                          <Link href={`/departments/${dept._id}/edit`}>
                             <Button
-                              variant='outline'
+                              variant='secondary'
                               size='sm'
-                              aria-label={`عرض تفاصيل قسم ${dept.name}`}
+                              aria-label={`تعديل قسم ${dept.name}`}
                             >
-                              <Eye className='w-4 h-4 mr-1' aria-hidden='true' />
-                              تفاصيل
+                              <Pencil className='w-4 h-4 mr-1' aria-hidden='true' />
+                              تعديل
                             </Button>
                           </Link>
-                          {canManageDepartments && (
-                            <Link href={`/departments/${dept._id}/edit`}>
-                              <Button
-                                variant='secondary'
-                                size='sm'
-                                aria-label={`تعديل قسم ${dept.name}`}
-                              >
-                                <Pencil className='w-4 h-4 mr-1' aria-hidden='true' />
-                                تعديل
-                              </Button>
-                            </Link>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                        )}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           )}
         </CardContent>
       </Card>

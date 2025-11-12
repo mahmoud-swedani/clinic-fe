@@ -18,15 +18,18 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useUserPermissions } from '@/hooks/usePermissions'
-import { Plus } from 'lucide-react'
+import { Plus, Pencil, Eye } from 'lucide-react'
 import { format } from 'date-fns'
 import { ar } from 'date-fns/locale'
 import { TreatmentStage, User, PaginatedResponse } from '@/types/api'
+import { useRouter } from 'next/navigation'
 
 function TreatmentStagesContent() {
+  const router = useRouter()
   const { page, limit, goToPage, changeLimit } = usePagination(10)
   const { data, isLoading, isError } = useTreatmentStages()
-  const { canManageTreatmentStages } = useUserPermissions()
+  const { canManageTreatmentStages, hasPermission } = useUserPermissions()
+  const canEdit = hasPermission('treatment-stages.edit')
   
   const typedData = data as PaginatedResponse<TreatmentStage> | undefined
   // Extract array from paginated response
@@ -174,13 +177,15 @@ function TreatmentStagesContent() {
                     <th className='px-4 py-3 font-semibold'>التكلفة</th>
                     <th className='px-4 py-3 font-semibold'>القسم</th>
                     <th className='px-4 py-3 font-semibold'>الحالة</th>
+                    {canEdit && <th className='px-4 py-3 font-semibold'>الإجراءات</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredData.map((stage: TreatmentStage) => (
                     <tr
                       key={stage._id}
-                      className='border-b hover:bg-gray-50 transition-colors'
+                      className='border-b hover:bg-gray-50 transition-colors cursor-pointer'
+                      onClick={() => router.push(`/treatment-stages/${stage._id}`)}
                     >
                       <td className='px-4 py-3 font-medium'>{stage.title}</td>
                       <td className='px-4 py-3'>
@@ -232,6 +237,30 @@ function TreatmentStagesContent() {
                           {stage.isCompleted ? 'مكتملة' : 'غير مكتملة'}
                         </Badge>
                       </td>
+                      {canEdit && (
+                        <td className='px-4 py-3' onClick={(e) => e.stopPropagation()}>
+                          <div className='flex items-center gap-2'>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              onClick={() => router.push(`/treatment-stages/${stage._id}`)}
+                              className='h-8 w-8 p-0'
+                              title='عرض التفاصيل'
+                            >
+                              <Eye className='w-4 h-4' />
+                            </Button>
+                            <Button
+                              variant='ghost'
+                              size='sm'
+                              onClick={() => router.push(`/treatment-stages/${stage._id}`)}
+                              className='h-8 w-8 p-0'
+                              title='تعديل'
+                            >
+                              <Pencil className='w-4 h-4' />
+                            </Button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>

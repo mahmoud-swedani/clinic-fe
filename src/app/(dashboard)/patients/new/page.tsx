@@ -8,9 +8,11 @@ import { toast } from 'sonner'
 import axios from '@/lib/axios'
 import { CreatePatientRequest } from '@/types/api'
 import { useRef } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 
 export default function NewPatientPage() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const isSubmittingRef = useRef(false)
 
   const handlePatientSubmit = async (patientData: CreatePatientRequest) => {
@@ -23,6 +25,14 @@ export default function NewPatientPage() {
     try {
       await axios.post('/patients', patientData)
       toast.success('تم إضافة المريض بنجاح ✅')
+      
+      // Invalidate all patient-related queries to ensure updates are reflected everywhere
+      queryClient.invalidateQueries({ queryKey: ['patients'] }) // Invalidate paginated queries
+      queryClient.invalidateQueries({ queryKey: ['form-data', 'patients'] }) // Invalidate form data cache
+      // Force refetch of ALL queries (not just active) to immediately update the UI for all users
+      queryClient.refetchQueries({ queryKey: ['patients'], type: 'all' })
+      queryClient.refetchQueries({ queryKey: ['form-data', 'patients'], type: 'all' })
+      
       router.push('/patients')
     } catch (error: unknown) {
       const errorMessage = 

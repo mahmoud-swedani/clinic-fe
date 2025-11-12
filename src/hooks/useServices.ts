@@ -15,8 +15,16 @@ export const useServices = () => {
       })
       return data // Return full PaginatedResponse
     },
-    staleTime: 5 * 60 * 1000, // تخزين مؤقت لمدة 5 دقائق
-    retry: 1,
+    staleTime: 10 * 60 * 1000, // 10 minutes - services don't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
     placeholderData: keepPreviousData,
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }

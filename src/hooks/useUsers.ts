@@ -17,8 +17,16 @@ export function useUsers(page?: number, limit?: number) {
       })
       return data // Return full PaginatedResponse
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - user list doesn't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
     placeholderData: keepPreviousData,
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }
 
@@ -31,7 +39,16 @@ export function useUser(id: string) {
       return data.data // Extract data from ApiResponse
     },
     enabled: !!id,
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 10 * 60 * 1000, // 10 minutes - user data doesn't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    refetchOnMount: false, // Don't refetch on mount if data is fresh
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }
 
@@ -99,7 +116,15 @@ export function useDoctors() {
       const { data } = await axios.get<ApiResponse<User[]>>('/user-roles/doctors')
       return data.data // Extract data from ApiResponse
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 15 * 60 * 1000, // 15 minutes - doctor list doesn't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }
 
@@ -111,7 +136,15 @@ export function useManagers() {
       const { data } = await axios.get<ApiResponse<User[]>>('/user-roles/managers')
       return data.data // Extract data from ApiResponse
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 15 * 60 * 1000, // 15 minutes - manager list doesn't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }
 
@@ -123,7 +156,15 @@ export function useAccountants() {
       const { data } = await axios.get<ApiResponse<User[]>>('/user-roles/accountants')
       return data.data // Extract data from ApiResponse
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 15 * 60 * 1000, // 15 minutes - accountant list doesn't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }
 
@@ -135,6 +176,14 @@ export function useSecretaries() {
       const { data } = await axios.get<ApiResponse<User[]>>('/user-roles/secretaries')
       return data.data // Extract data from ApiResponse
     },
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 15 * 60 * 1000, // 15 minutes - secretary list doesn't change frequently
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 429 (rate limit) errors
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
   })
 }

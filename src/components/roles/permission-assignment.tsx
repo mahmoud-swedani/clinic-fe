@@ -31,14 +31,35 @@ export function PermissionAssignment({
     patients: 1,
     appointments: 2,
     'treatment-stages': 3,
-    financial: 4, // Includes invoices, financial-records, payments
-    products: 5,
-    sales: 6,
-    departments: 7,
-    services: 8,
-    users: 9,
-    roles: 10,
-    general: 11,
+    invoices: 4, // الفواتير
+    'financial-records': 5, // المشتريات
+    payments: 6, // المدفوعات
+    financial: 7, // General financial permissions (if any)
+    products: 8,
+    sales: 9,
+    departments: 10,
+    services: 11,
+    users: 12,
+    roles: 13,
+    general: 14,
+  }
+
+  // Arabic display names for categories
+  const categoryDisplayNames: Record<string, string> = {
+    patients: 'المرضى',
+    appointments: 'المواعيد',
+    'treatment-stages': 'مراحل العلاج',
+    invoices: 'الفواتير',
+    'financial-records': 'المشتريات',
+    payments: 'المدفوعات',
+    financial: 'البيانات المالية',
+    products: 'المنتجات',
+    sales: 'المبيعات',
+    departments: 'الأقسام',
+    services: 'الخدمات',
+    users: 'المستخدمين',
+    roles: 'الأدوار والصلاحيات',
+    general: 'عام',
   }
 
   // Permission type order within category
@@ -113,7 +134,9 @@ export function PermissionAssignment({
         <Card key={category}>
           <CardHeader>
             <div className='flex items-center justify-between'>
-              <CardTitle className='text-lg'>{category}</CardTitle>
+              <CardTitle className='text-lg'>
+                {categoryDisplayNames[category] || category}
+              </CardTitle>
               <Button
                 type='button'
                 variant='outline'

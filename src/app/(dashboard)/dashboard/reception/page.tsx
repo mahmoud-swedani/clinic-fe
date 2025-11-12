@@ -24,7 +24,7 @@ import { useTodayAppointments, useOverdueAppointments, useAllAppointments } from
 import { AppointmentForm } from '@/components/appointments/appointment-form'
 import { format, startOfToday, isWithinInterval, startOfTomorrow, endOfTomorrow, startOfMonth, endOfMonth, addMonths, addDays, endOfDay } from 'date-fns'
 import { arSA } from 'date-fns/locale'
-import { Calendar, Users, Plus, Clock, Activity, Eye, FileEdit, Trash2, AlertCircle, CheckCircle2, TrendingUp, RefreshCw } from 'lucide-react'
+import { Calendar, Users, Plus, Clock, Activity, Eye, FileEdit, Trash2, AlertCircle, CheckCircle2, TrendingUp, RefreshCw, Pencil } from 'lucide-react'
 import axios from '@/lib/axios'
 import { toast } from 'sonner'
 import { Appointment, AuditLog } from '@/types/api'
@@ -51,6 +51,8 @@ moment.locale('ar')
 function ReceptionDashboardContent() {
   const router = useRouter()
   const [openAddAppointment, setOpenAddAppointment] = useState(false)
+  const [openEditAppointment, setOpenEditAppointment] = useState(false)
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
   const [nextAppointmentFilter, setNextAppointmentFilter] = useState<NextAppointmentFilter>('tomorrow')
   const [changingStatusId, setChangingStatusId] = useState<string | null>(null)
   const [lateActionFilter, setLateActionFilter] = useState<'all' | 'overdue' | 'recent'>('all')
@@ -64,7 +66,8 @@ function ReceptionDashboardContent() {
 
   // Get user permissions to check if user can view appointment activities
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
-  const { canViewAppointmentActivities, hasPermission } = useUserPermissions()
+  const { canViewAppointmentActivities, canManageAppointments, hasPermission } = useUserPermissions()
+  const canEditAppointment = canManageAppointments || hasPermission('appointments.edit')
   
   // Check if user has permission to view activities (either through canViewAppointmentActivities or explicit permission)
   // Wait for user data to load before checking permissions
@@ -722,6 +725,20 @@ function ReceptionDashboardContent() {
                                         <SelectItem value='ملغي'>ملغي</SelectItem>
                                       </SelectContent>
                                     </Select>
+                                    {canEditAppointment && (
+                                      <Button
+                                        variant='outline'
+                                        size='sm'
+                                        onClick={() => {
+                                          setSelectedAppointment(appointment)
+                                          setOpenEditAppointment(true)
+                                        }}
+                                        className='h-8 w-8 p-0'
+                                        title='تعديل الموعد'
+                                      >
+                                        <Pencil className='w-4 h-4' />
+                                      </Button>
+                                    )}
                                     <Button
                                       variant='outline'
                                       size='sm'
@@ -872,6 +889,21 @@ function ReceptionDashboardContent() {
                           <SelectItem value='ملغي'>ملغي</SelectItem>
                         </SelectContent>
                       </Select>
+                      {canEditAppointment && (
+                        <Button
+                          variant='outline'
+                          size='sm'
+                          onClick={() => {
+                            setSelectedAppointment(appointment)
+                            setOpenEditAppointment(true)
+                          }}
+                          className='flex items-center gap-1'
+                          title='تعديل الموعد'
+                        >
+                          <Pencil className='w-4 h-4' />
+                          تعديل
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -1245,6 +1277,38 @@ function ReceptionDashboardContent() {
             </CardContent>
           </Card>
         </section>
+      )}
+
+      {/* Edit Appointment Dialog */}
+      {canEditAppointment && (
+        <Dialog open={openEditAppointment} onOpenChange={setOpenEditAppointment}>
+          <DialogContent className='max-w-xl' dir='rtl'>
+            <DialogHeader>
+              <DialogTitle>تعديل الموعد</DialogTitle>
+              <DialogDescription>
+                قم بتعديل بيانات الموعد
+              </DialogDescription>
+            </DialogHeader>
+            {selectedAppointment && (
+              <AppointmentForm
+                patients={patients}
+                doctors={doctors}
+                services={services}
+                departments={departments}
+                initialData={selectedAppointment}
+                onSuccess={() => {
+                  setOpenEditAppointment(false)
+                  setSelectedAppointment(null)
+                  // Invalidate all appointment queries to ensure updates are reflected everywhere
+                  queryClient.invalidateQueries({ queryKey: ['appointments'] })
+                  queryClient.invalidateQueries({ queryKey: ['appointments', 'all-shared'] })
+                  // Force refetch of ALL queries (not just active) to immediately update the UI for all users
+                  queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+                }}
+              />
+            )}
+          </DialogContent>
+        </Dialog>
       )}
     </main>
   )

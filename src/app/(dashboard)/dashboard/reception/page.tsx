@@ -1,7 +1,7 @@
 // src/app/(dashboard)/dashboard/reception/page.tsx
 'use client'
 
-import React, { useState, Suspense } from 'react'
+import React, { useState, Suspense, useEffect } from 'react'
 import {
   Card,
   CardContent,
@@ -66,8 +66,26 @@ function ReceptionDashboardContent() {
 
   // Get user permissions to check if user can view appointment activities
   const { data: currentUser, isLoading: userLoading } = useCurrentUser()
-  const { canViewAppointmentActivities, canManageAppointments, hasPermission } = useUserPermissions()
-  const canEditAppointment = canManageAppointments || hasPermission('appointments.edit')
+  const { canViewAppointmentActivities, canManageAppointments, hasPermission, permissions } = useUserPermissions()
+  // Check for edit permission - try multiple ways
+  const canEditAppointment = 
+    canManageAppointments || 
+    hasPermission('appointments.edit') ||
+    hasPermission('appointments.update') ||
+    permissions.includes('appointments.edit') ||
+    permissions.includes('appointments.update')
+  
+  // Debug logging in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && !userLoading && currentUser) {
+      console.log('=== Reception Dashboard Permission Debug ===')
+      console.log('User permissions:', permissions)
+      console.log('canManageAppointments:', canManageAppointments)
+      console.log('hasPermission(appointments.edit):', hasPermission('appointments.edit'))
+      console.log('canEditAppointment:', canEditAppointment)
+      console.log('==========================================')
+    }
+  }, [permissions, canManageAppointments, hasPermission, canEditAppointment, currentUser, userLoading])
   
   // Check if user has permission to view activities (either through canViewAppointmentActivities or explicit permission)
   // Wait for user data to load before checking permissions

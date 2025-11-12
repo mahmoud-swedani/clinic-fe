@@ -39,7 +39,46 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
     canViewPatientSales,
     canViewPatientActivities,
     hasPermission,
+    permissions,
   } = useUserPermissions()
+  
+  // Add fallback permission checks for tabs
+  const canViewAppointmentsTab = useMemo(() => {
+    return (
+      canViewPatientAppointments ||
+      hasPermission('appointments.view') ||
+      hasPermission('appointments.create') ||
+      hasPermission('appointments.edit') ||
+      permissions.includes('appointments.view') ||
+      permissions.includes('appointments.create') ||
+      permissions.includes('appointments.edit')
+    )
+  }, [canViewPatientAppointments, hasPermission, permissions])
+  
+  const canViewTreatmentStagesTab = useMemo(() => {
+    return (
+      canViewPatientTreatmentStages ||
+      hasPermission('treatment-stages.view') ||
+      hasPermission('treatment-stages.create') ||
+      hasPermission('treatment-stages.edit') ||
+      permissions.includes('treatment-stages.view') ||
+      permissions.includes('treatment-stages.create') ||
+      permissions.includes('treatment-stages.edit')
+    )
+  }, [canViewPatientTreatmentStages, hasPermission, permissions])
+  
+  const canViewSalesTab = useMemo(() => {
+    return (
+      canViewPatientSales ||
+      hasPermission('sales.view') ||
+      hasPermission('sales.create') ||
+      hasPermission('sales.edit') ||
+      permissions.includes('sales.view') ||
+      permissions.includes('sales.create') ||
+      permissions.includes('sales.edit')
+    )
+  }, [canViewPatientSales, hasPermission, permissions])
+  
   const canEditStage = hasPermission('treatment-stages.edit')
   const [search, setSearch] = useState('')
   const [selectedDoctorId, setSelectedDoctorId] = useState<string>('all')
@@ -53,11 +92,11 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
   // Determine available tabs based on permissions
   const availableTabs = useMemo(() => {
     const tabs: ('info' | 'appointments' | 'stages' | 'sales')[] = ['info']
-    if (canViewPatientAppointments) tabs.push('appointments')
-    if (canViewPatientTreatmentStages) tabs.push('stages')
-    if (canViewPatientSales) tabs.push('sales')
+    if (canViewAppointmentsTab) tabs.push('appointments')
+    if (canViewTreatmentStagesTab) tabs.push('stages')
+    if (canViewSalesTab) tabs.push('sales')
     return tabs
-  }, [canViewPatientAppointments, canViewPatientTreatmentStages, canViewPatientSales])
+  }, [canViewAppointmentsTab, canViewTreatmentStagesTab, canViewSalesTab])
   
   const [activeTab, setActiveTab] = useState<'info' | 'appointments' | 'stages' | 'sales'>('info')
   
@@ -161,13 +200,13 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
       >
         <TabsList className='mb-4 border-b border-gray-200 dark:border-gray-700'>
           <TabsTrigger value='info'>معلومات المريض</TabsTrigger>
-          {canViewPatientAppointments && (
+          {canViewAppointmentsTab && (
             <TabsTrigger value='appointments'>المواعيد</TabsTrigger>
           )}
-          {canViewPatientTreatmentStages && (
+          {canViewTreatmentStagesTab && (
             <TabsTrigger value='stages'>المراحل العلاجية</TabsTrigger>
           )}
-          {canViewPatientSales && (
+          {canViewSalesTab && (
             <TabsTrigger value='sales'>المبيعات</TabsTrigger>
           )}
         </TabsList>
@@ -307,7 +346,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
         </TabsContent>
 
         {/* تبويب المواعيد */}
-        {canViewPatientAppointments && (
+        {canViewAppointmentsTab && (
           <TabsContent value='appointments'>
             <Card className='overflow-hidden'>
               <CardHeader>
@@ -346,7 +385,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
         )}
 
         {/* تبويب المراحل العلاجية */}
-        {canViewPatientTreatmentStages && (
+        {canViewTreatmentStagesTab && (
           <TabsContent value='stages'>
           <div className='flex flex-col md:flex-row md:items-center md:justify-between gap-4 mb-4'>
             <Input
@@ -489,7 +528,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
         )}
 
         {/* تبويب المبيعات */}
-        {canViewPatientSales && (
+        {canViewSalesTab && (
           <TabsContent value='sales'>
           {/* (الكود كما هو دون تغيير) */}
           <Card className='overflow-hidden'>

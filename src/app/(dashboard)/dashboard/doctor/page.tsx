@@ -1,7 +1,7 @@
 // src/app/(dashboard)/dashboard/doctor/page.tsx
 'use client'
 
-import React, { useState, Suspense } from 'react'
+import React, { useState, Suspense, useEffect } from 'react'
 import {
   Card,
   CardContent,
@@ -58,13 +58,32 @@ function DoctorDashboardContent() {
   const [nextAppointmentFilter, setNextAppointmentFilter] = useState<NextAppointmentFilter>('tomorrow')
   const [incompleteStageFilter, setIncompleteStageFilter] = useState<'all' | 'overdue' | 'recent'>('all')
   const [bulkUpdatingStages, setBulkUpdatingStages] = useState(false)
-  const { canManageTreatmentStages, canAddTreatmentStageFromAppointment, hasPermission } = useUserPermissions()
-  const canAddTreatmentStage = hasPermission('treatment-stages.create') || canAddTreatmentStageFromAppointment
+  const { canManageTreatmentStages, canAddTreatmentStageFromAppointment, hasPermission, permissions } = useUserPermissions()
+  // Check for add treatment stage permission - try multiple ways
+  const canAddTreatmentStage = 
+    hasPermission('treatment-stages.create') || 
+    canAddTreatmentStageFromAppointment ||
+    hasPermission('appointments.add-treatment-stage') ||
+    permissions.includes('treatment-stages.create') ||
+    permissions.includes('appointments.add-treatment-stage')
   const canEditStage = 
     hasPermission('treatment-stages.edit') ||
     hasPermission('treatment-stages.update') ||
     hasPermission('treatmentStages.edit') ||
     hasPermission('treatmentStages.update')
+  
+  // Debug logging in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'development' && currentUser) {
+      console.log('=== Doctor Dashboard Permission Debug ===')
+      console.log('User permissions:', permissions)
+      console.log('canAddTreatmentStageFromAppointment:', canAddTreatmentStageFromAppointment)
+      console.log('hasPermission(treatment-stages.create):', hasPermission('treatment-stages.create'))
+      console.log('hasPermission(appointments.add-treatment-stage):', hasPermission('appointments.add-treatment-stage'))
+      console.log('canAddTreatmentStage:', canAddTreatmentStage)
+      console.log('========================================')
+    }
+  }, [permissions, canAddTreatmentStageFromAppointment, hasPermission, canAddTreatmentStage, currentUser])
 
   const { data: todayAppointments, isLoading: todayLoading } = useTodayAppointments()
   const { data: upcomingAppointments, isLoading: upcomingLoading } = useUpcomingAppointments()

@@ -58,8 +58,13 @@ function DoctorDashboardContent() {
   const [nextAppointmentFilter, setNextAppointmentFilter] = useState<NextAppointmentFilter>('tomorrow')
   const [incompleteStageFilter, setIncompleteStageFilter] = useState<'all' | 'overdue' | 'recent'>('all')
   const [bulkUpdatingStages, setBulkUpdatingStages] = useState(false)
-  const { canManageTreatmentStages, hasPermission } = useUserPermissions()
-  const canEditStage = hasPermission('treatment-stages.edit')
+  const { canManageTreatmentStages, canAddTreatmentStageFromAppointment, hasPermission } = useUserPermissions()
+  const canAddTreatmentStage = hasPermission('treatment-stages.create') || canAddTreatmentStageFromAppointment
+  const canEditStage = 
+    hasPermission('treatment-stages.edit') ||
+    hasPermission('treatment-stages.update') ||
+    hasPermission('treatmentStages.edit') ||
+    hasPermission('treatmentStages.update')
 
   const { data: todayAppointments, isLoading: todayLoading } = useTodayAppointments()
   const { data: upcomingAppointments, isLoading: upcomingLoading } = useUpcomingAppointments()
@@ -722,7 +727,7 @@ function DoctorDashboardContent() {
                     <AppointmentCard
                       key={appointment._id}
                       appointment={appointment}
-                      canManageTreatmentStages={canManageTreatmentStages}
+                      canManageTreatmentStages={canAddTreatmentStage}
                       canEditStage={canEditStage}
                       onAddStage={openStageDialog}
                       onEditStage={openEditStageDialog}

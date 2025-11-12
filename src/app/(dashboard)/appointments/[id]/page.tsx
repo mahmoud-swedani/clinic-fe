@@ -48,7 +48,12 @@ export default function AppointmentDetailPage() {
   const appointmentId = params.id
   const queryClient = useQueryClient()
   const { canAddTreatmentStageFromAppointment, canManageAppointments, canViewAppointmentActivities, hasPermission } = useUserPermissions()
-  const canEditStage = hasPermission('treatment-stages.edit')
+  const canEditAppointment = canManageAppointments || hasPermission('appointments.edit')
+  const canEditStage = 
+    hasPermission('treatment-stages.edit') ||
+    hasPermission('treatment-stages.update') ||
+    hasPermission('treatmentStages.edit') ||
+    hasPermission('treatmentStages.update')
 
   const [openAddStage, setOpenAddStage] = useState(false)
   const [openEditForm, setOpenEditForm] = useState(false)
@@ -138,7 +143,7 @@ export default function AppointmentDetailPage() {
       >
         {/* أزرار الإجراءات في الأعلى */}
         <div className='flex justify-end gap-2'>
-          {canManageAppointments && (
+          {canEditAppointment && (
             <Dialog open={openEditForm} onOpenChange={setOpenEditForm}>
               <DialogTrigger asChild>
                 <Button variant='outline' className='flex items-center gap-2'>

@@ -22,16 +22,16 @@ export const queryKeys = {
     me: () => [...queryKeys.currentUser.all, 'me'] as const,
   },
 
-  // Patients
-  patients: {
-    all: ['patients'] as const,
-    lists: () => [...queryKeys.patients.all, 'list'] as const,
+  // Clients
+  clients: {
+    all: ['clients'] as const,
+    lists: () => [...queryKeys.clients.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) =>
-      [...queryKeys.patients.lists(), filters || {}] as const,
-    details: () => [...queryKeys.patients.all, 'detail'] as const,
-    detail: (id: string) => [...queryKeys.patients.details(), id] as const,
+      [...queryKeys.clients.lists(), filters || {}] as const,
+    details: () => [...queryKeys.clients.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.clients.details(), id] as const,
     withAppointments: (id: string) =>
-      [...queryKeys.patients.details(), id, 'appointments'] as const,
+      [...queryKeys.clients.details(), id, 'appointments'] as const,
   },
 
   // Appointments
@@ -42,8 +42,8 @@ export const queryKeys = {
       [...queryKeys.appointments.lists(), filters || {}] as const,
     details: () => [...queryKeys.appointments.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.appointments.details(), id] as const,
-    byPatient: (patientId: string) =>
-      [...queryKeys.appointments.all, 'patient', patientId] as const,
+    byClient: (clientId: string) =>
+      [...queryKeys.appointments.all, 'client', clientId] as const,
   },
 
   // Departments
@@ -84,6 +84,8 @@ export const queryKeys = {
       [...queryKeys.invoices.lists(), filters || {}] as const,
     unpaid: (filters?: Record<string, unknown>) =>
       [...queryKeys.invoices.all, 'unpaid', filters || {}] as const,
+    details: () => [...queryKeys.invoices.all, 'detail'] as const,
+    detail: (id: string) => [...queryKeys.invoices.details(), id] as const,
   },
 
   // Payments
@@ -92,6 +94,8 @@ export const queryKeys = {
     lists: () => [...queryKeys.payments.all, 'list'] as const,
     list: (filters?: Record<string, unknown>) =>
       [...queryKeys.payments.lists(), filters || {}] as const,
+    byInvoice: (invoiceId: string) =>
+      [...queryKeys.payments.all, 'invoice', invoiceId] as const,
   },
 
   // Products
@@ -135,8 +139,8 @@ export const queryKeys = {
       [...queryKeys.treatmentStages.lists(), filters || {}] as const,
     details: () => [...queryKeys.treatmentStages.all, 'detail'] as const,
     detail: (id: string) => [...queryKeys.treatmentStages.details(), id] as const,
-    byPatient: (patientId: string) =>
-      [...queryKeys.treatmentStages.all, 'patient', patientId] as const,
+    byClient: (clientId: string) =>
+      [...queryKeys.treatmentStages.all, 'client', clientId] as const,
   },
 
   // Dashboard

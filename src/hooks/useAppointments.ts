@@ -64,7 +64,7 @@ export const useAppointments = (page?: number, limit?: number) => {
 
     // Only poll when tab is visible
     const startPolling = () => {
-      const baseInterval = 30 * 1000 // Base polling interval: 30 seconds (increased to avoid rate limiting)
+      const baseInterval = 60 * 1000 // Base polling interval: 60 seconds (increased to avoid rate limiting)
       const pollInterval = baseInterval * backoffMultiplierRef.current
       
       intervalRef.current = setInterval(async () => {
@@ -302,7 +302,7 @@ export const useAllAppointments = () => {
 
     // Only poll when tab is visible
     const startPolling = () => {
-      const baseInterval = 30 * 1000 // Base polling interval: 30 seconds (increased to avoid rate limiting)
+      const baseInterval = 60 * 1000 // Base polling interval: 60 seconds (increased to avoid rate limiting)
       const pollInterval = baseInterval * backoffMultiplierRef.current
       
       intervalRef.current = setInterval(async () => {
@@ -344,12 +344,13 @@ export const useAllAppointments = () => {
               return
             }
             
-            // Refetch if there's an error (not 429), no data, or data is older than 20 seconds
+            // Refetch if there's an error (not 429), no data, or data is older than 50 seconds
+            // This ensures we refetch approximately every 60 seconds while avoiding rate limits
             const shouldRefetch = 
               (queryState?.status === 'error' && error?.response?.status !== 429) ||
               !queryState?.data ||
               (queryState?.dataUpdatedAt && 
-               Date.now() - queryState.dataUpdatedAt > 20 * 1000) // Data older than 20 seconds
+               Date.now() - queryState.dataUpdatedAt > 50 * 1000) // Data older than 50 seconds (ensures refetch every ~60 seconds)
 
             if (shouldRefetch) {
               // Check if query is already fetching to avoid concurrent refetches
@@ -472,6 +473,7 @@ export const useTodayAppointments = (filters?: { status?: string; doctorId?: str
     queryKey: ['appointments', 'all-shared'],
     queryFn: fetchAllAppointments, // Use shared function for proper deduplication
     notifyOnChangeProps: 'all', // Force re-render on all changes
+    refetchOnWindowFocus: false, // Don't refetch on window focus - polling handles updates (to avoid rate limiting)
     select: (allAppointments) => {
       // Always create a new array with new object references to ensure React Query detects changes
       // Filter client-side for today's appointments
@@ -500,8 +502,8 @@ export const useTodayAppointments = (filters?: { status?: string; doctorId?: str
       })
         .map((apt: Appointment) => ({ ...apt })) // Create new object references
     },
-    staleTime: 30 * 1000, // 30 seconds - matches polling interval
-    // Note: Polling is handled by useAllAppointments hook
+    staleTime: 0, // 0 seconds - Always re-run select() when underlying cache updates from useAllAppointments polling
+    // Note: Polling is handled by useAllAppointments hook. staleTime: 0 ensures this hook reacts to cache updates immediately.
     retry: 1,
   })
 }
@@ -539,8 +541,8 @@ export const useOverdueAppointments = () => {
       })
         .map((apt: Appointment) => ({ ...apt })) // Create new object references
     },
-    staleTime: 30 * 1000, // 30 seconds - matches polling interval
-    // Note: Polling is handled by useAllAppointments hook (shared cache)
+    staleTime: 0, // 0 seconds - Always re-run select() when underlying cache updates from useAllAppointments polling
+    // Note: Polling is handled by useAllAppointments hook. staleTime: 0 ensures this hook reacts to cache updates immediately.
     retry: 1,
   })
 }
@@ -559,6 +561,7 @@ export const useAppointmentsByDateRange = (
     queryKey: ['appointments', 'all-shared'],
     queryFn: fetchAllAppointments, // Use shared function for proper deduplication
     notifyOnChangeProps: 'all', // Force re-render on all changes
+    refetchOnWindowFocus: false, // Don't refetch on window focus - polling handles updates (to avoid rate limiting)
     select: (allAppointments) => {
       // Always create a new array with new object references to ensure React Query detects changes
       // Filter client-side by date range
@@ -589,8 +592,8 @@ export const useAppointmentsByDateRange = (
         .map((apt: Appointment) => ({ ...apt })) // Create new object references
     },
     enabled: !!startDate && !!endDate,
-    staleTime: 30 * 1000, // 30 seconds - matches polling interval
-    // Note: Polling is handled by useAllAppointments hook (shared cache)
+    staleTime: 0, // 0 seconds - Always re-run select() when underlying cache updates from useAllAppointments polling
+    // Note: Polling is handled by useAllAppointments hook. staleTime: 0 ensures this hook reacts to cache updates immediately.
     retry: 1,
   })
 }

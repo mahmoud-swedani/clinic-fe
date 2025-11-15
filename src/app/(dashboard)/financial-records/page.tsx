@@ -94,20 +94,12 @@ function FinancialRecordsContent() {
       <div className='flex justify-between items-center'>
         <h1 className='text-2xl font-bold tracking-tight'>السجلات المالية</h1>
         {canManageFinancialRecords && (
-          <div className='flex gap-2'>
-            <Link href='/financial-records/new?type=purchase'>
-              <Button variant='default' className='flex items-center gap-2'>
-                <Plus className='w-4 h-4' />
-                إضافة مشتريات
-              </Button>
-            </Link>
-            <Link href='/financial-records/new'>
-              <Button variant='outline' className='flex items-center gap-2'>
-                <Plus className='w-4 h-4' />
-                إضافة سجل جديد
-              </Button>
-            </Link>
-          </div>
+          <Link href='/financial-records/new'>
+            <Button variant='default' className='flex items-center gap-2'>
+              <Plus className='w-4 h-4' />
+              إضافة سجل جديد
+            </Button>
+          </Link>
         )}
       </div>
 

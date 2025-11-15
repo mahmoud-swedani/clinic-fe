@@ -53,10 +53,10 @@ const navItems = [
     permission: null, // Always visible
   },
   { 
-    name: 'المرضى', 
-    href: '/patients', 
+    name: 'العملاء', 
+    href: '/clients', 
     icon: <Users size={20} />,
-    permission: 'patients.view',
+    permission: 'clients.view',
   },
   { 
     name: 'المواعيد', 
@@ -125,16 +125,16 @@ const getDefaultPermissionsForRole = (role?: string): string[] => {
         'appointments.view',
         'appointments.create',
         'appointments.edit',
-        'patients.view',
-        'patients.create',
-        'patients.edit',
+        'clients.view',
+        'clients.create',
+        'clients.edit',
         // Note: treatment-stages and invoices removed - receptionists don't have permission
       ]
     case 'طبيب': // Doctor
       return [
         'appointments.view',
         'appointments.edit',
-        'patients.view',
+        'clients.view',
         'treatment-stages.view',
         'treatment-stages.create',
         'treatment-stages.edit',
@@ -238,27 +238,52 @@ export default function Sidebar() {
   // Only filter and show items when user data is loaded (not loading/fetching and no error)
   const visibleNavItems = isUserLoading || userError || !user
     ? [] // Don't show any items while loading/fetching or on error
-    : navItems
-        .filter((item) => {
-          const shouldShow = shouldShowMenuItem(
-            item.permission, 
-            user?.role, 
-            hasPermission, 
-            hasAnyPermission,
-            userPermissions
-          )
-          return shouldShow
-        })
-        .map((item) => {
-          // Override dashboard href based on user role
-          if (item.href === '/dashboard') {
-            return {
-              ...item,
-              href: getDashboardHref(user?.role),
+    : (() => {
+        // For Owner/Manager, show items immediately (they see all items anyway)
+        if (isOwnerOrManager) {
+          return navItems.map((item) => {
+            // Override dashboard href based on user role
+            if (item.href === '/dashboard') {
+              return {
+                ...item,
+                href: getDashboardHref(user?.role),
+              }
             }
-          }
-          return item
-        })
+            return item
+          })
+        }
+        
+        // For other roles, ensure permissions array is loaded (not undefined)
+        // Check if permissions property exists on user object (even if empty array)
+        // to distinguish between "no permissions" and "permissions not loaded yet"
+        if (user?.permissions === undefined) {
+          // Permissions not loaded yet - return empty array to show loading state
+          return []
+        }
+        
+        // Permissions are loaded (even if empty array), filter menu items
+        return navItems
+          .filter((item) => {
+            const shouldShow = shouldShowMenuItem(
+              item.permission, 
+              user?.role, 
+              hasPermission, 
+              hasAnyPermission,
+              userPermissions
+            )
+            return shouldShow
+          })
+          .map((item) => {
+            // Override dashboard href based on user role
+            if (item.href === '/dashboard') {
+              return {
+                ...item,
+                href: getDashboardHref(user?.role),
+              }
+            }
+            return item
+          })
+      })()
 
   return (
     <aside
@@ -271,6 +296,7 @@ export default function Sidebar() {
       <button
         onClick={() => setCollapsed(!collapsed)}
         className='mb-6 text-gray-600 hover:text-black self-end'
+        suppressHydrationWarning
       >
         {collapsed ? <ChevronRight /> : <ChevronLeft />}
       </button>
@@ -332,6 +358,7 @@ export default function Sidebar() {
                   collapsed ? 'justify-center' : ''
                 )}
                 disabled={isNavigating}
+                suppressHydrationWarning
               >
                 {isNavigating ? (
                   <Loader2 className="animate-spin" size={20} />

@@ -11,13 +11,13 @@ import {
 import { SearchableSelect } from '@/components/ui/searchable-select'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
-import { Patient, User, Service, Department, Appointment } from '@/types/api'
+import { Client, Service, Department, Appointment } from '@/types/api'
 import axios from '@/lib/axios'
 import { toast } from 'sonner'
+import { useUsersByDepartment } from '@/hooks/useUsers'
 
 interface AppointmentFormProps {
-  patients: Patient[]
-  doctors: User[]
+  clients: Client[]
   services: Service[]
   departments: Department[]
   onSuccess: () => void
@@ -25,8 +25,7 @@ interface AppointmentFormProps {
 }
 
 export function AppointmentForm({
-  patients,
-  doctors,
+  clients,
   services,
   departments,
   onSuccess,
@@ -59,10 +58,13 @@ export function AppointmentForm({
   )
   const [filteredServices, setFilteredServices] = useState<Service[]>([])
 
-  const [patientId, setPatientId] = useState<string>(
-    initialData ? extractId(initialData.patient) : ''
+  // Fetch users by department
+  const { data: departmentUsers = [], isLoading: loadingUsers } = useUsersByDepartment(selectedDepartment)
+
+  const [clientId, setClientId] = useState<string>(
+    initialData ? extractId(initialData.client) : ''
   )
-  const [doctorId, setDoctorId] = useState<string>(
+  const [userId, setUserId] = useState<string>(
     initialData ? extractId(initialData.doctor) : ''
   )
   const [serviceId, setServiceId] = useState<string>(
@@ -102,6 +104,33 @@ export function AppointmentForm({
       }
     }
   }, [initialData, extractId])
+
+  // Track previous department to detect actual changes
+  const prevDepartmentRef = React.useRef<string | null>(selectedDepartment)
+  
+  // Clear user selection when department actually changes (unless editing and user is still valid)
+  useEffect(() => {
+    const prevDepartment = prevDepartmentRef.current
+    const currentDepartment = selectedDepartment
+    
+    // Only clear if department actually changed (not just on initial load)
+    if (currentDepartment && prevDepartment !== null && prevDepartment !== currentDepartment) {
+      if (!isEditing) {
+        // When creating new appointment, clear user if department changes
+        setUserId('')
+      } else if (userId) {
+        // When editing, check if current user is still in the new department
+        const userStillValid = departmentUsers.some((user) => extractId(user) === userId)
+        if (!userStillValid && departmentUsers.length > 0) {
+          // User is no longer in this department, clear selection
+          setUserId('')
+        }
+      }
+    }
+    
+    // Update ref for next comparison
+    prevDepartmentRef.current = currentDepartment
+  }, [selectedDepartment, isEditing, userId, departmentUsers, extractId])
 
   // فلترة الخدمات بناء على القسم
   useEffect(() => {
@@ -152,16 +181,26 @@ export function AppointmentForm({
     // Validate all required fields
     const errors: string[] = []
 
-    if (!patientId || patientId.trim() === '') {
-      errors.push('يرجى اختيار المريض')
-    }
-
-    if (!doctorId || doctorId.trim() === '') {
-      errors.push('يرجى اختيار الطبيب')
-    }
-
     if (!selectedDepartment) {
-      errors.push('يرجى اختيار القسم')
+      errors.push('يرجى اختيار القسم أولاً')
+    }
+
+    if (!clientId || clientId.trim() === '') {
+      errors.push('يرجى اختيار العميل')
+    }
+
+    // Validate userId - check both string and trimmed value
+    const userIdStr = userId ? String(userId).trim() : ''
+    if (!userIdStr || userIdStr === '') {
+      errors.push('يرجى اختيار المستخدم')
+    }
+
+    // Validate that selected user belongs to selected department
+    if (selectedDepartment && userId) {
+      const userBelongsToDepartment = departmentUsers.some((user) => extractId(user) === userId)
+      if (!userBelongsToDepartment) {
+        errors.push('المستخدم المحدد لا ينتمي إلى القسم المحدد')
+      }
     }
 
     if (!serviceId || serviceId.trim() === '') {
@@ -186,9 +225,12 @@ export function AppointmentForm({
 
     setIsSubmitting(true)
     try {
+      // Use the validated userIdStr from validation above
+      const finalUserId = userIdStr || userId
+      
       const appointmentData = {
-        patient: patientId,
-        doctor: doctorId,
+        client: clientId,
+        doctor: finalUserId, // Use validated userId
         service: serviceId,
         date,
         notes,
@@ -207,8 +249,8 @@ export function AppointmentForm({
 
       onSuccess()
       if (!isEditing) {
-        setPatientId('')
-        setDoctorId('')
+        setClientId('')
+        setUserId('')
         setSelectedDepartment(null)
         setServiceId('')
         setDate('')
@@ -233,39 +275,45 @@ export function AppointmentForm({
   }
 
   // Convert data to options format for SearchableSelect
-  const patientOptions = React.useMemo(
+  const clientOptions = React.useMemo(
     () =>
-      patients.map((patient) => {
+      clients.map((client) => {
         // Format: "name - refNumber" or just "name" if no refNumber
-        const displayLabel = patient.refNumber
-          ? `${patient.fullName} - ${patient.refNumber}`
-          : patient.fullName
+        const displayLabel = client.refNumber
+          ? `${client.fullName} - ${client.refNumber}`
+          : client.fullName
         
         // Include phone and refNumber in searchable text
         const searchText = [
-          patient.fullName,
-          patient.refNumber,
-          patient.phone,
+          client.fullName,
+          client.refNumber,
+          client.phone,
         ]
           .filter(Boolean)
           .join(' ')
         
         return {
-          value: patient._id,
+          value: client._id,
           label: displayLabel,
           searchText: searchText,
         }
       }),
-    [patients]
+    [clients]
   )
 
-  const doctorOptions = React.useMemo(
+  const userOptions = React.useMemo(
     () =>
-      doctors.map((doctor) => ({
-        value: doctor._id,
-        label: doctor.name,
-      })),
-    [doctors]
+      departmentUsers.map((user) => {
+        const userId = extractId(user)
+        const userName = typeof user === 'object' && user !== null ? user.name : 'غير معروف'
+        const userRole = typeof user === 'object' && user !== null ? user.role : ''
+        const displayLabel = userRole ? `${userName} (${userRole})` : userName
+        return {
+          value: userId,
+          label: displayLabel,
+        }
+      }),
+    [departmentUsers, extractId]
   )
 
   const departmentOptions = React.useMemo(
@@ -299,35 +347,24 @@ export function AppointmentForm({
 
   return (
     <form onSubmit={handleSubmit} className='space-y-4' dir='rtl'>
-      {/* اختيار المريض */}
+      {/* اختيار العميل - أولاً */}
       <SearchableSelect
-        value={patientId}
-        onValueChange={setPatientId}
-        options={patientOptions}
-        placeholder='اختر المريض'
-        searchPlaceholder='ابحث عن مريض...'
-        emptyMessage='لا يوجد مرضى'
+        value={clientId}
+        onValueChange={setClientId}
+        options={clientOptions}
+        placeholder='اختر العميل'
+        searchPlaceholder='ابحث عن عميل...'
+        emptyMessage='لا يوجد عملاء'
         required
-        ariaLabel='اختر المريض'
+        ariaLabel='اختر العميل'
       />
 
-      {/* اختيار الطبيب */}
-      <SearchableSelect
-        value={doctorId}
-        onValueChange={setDoctorId}
-        options={doctorOptions}
-        placeholder='اختر الطبيب'
-        searchPlaceholder='ابحث عن طبيب...'
-        emptyMessage='لا يوجد أطباء'
-        required
-        ariaLabel='اختر الطبيب'
-      />
-
-      {/* اختيار القسم */}
+      {/* اختيار القسم - بعد اختيار العميل */}
       <SearchableSelect
         value={selectedDepartment || ''}
         onValueChange={(val) => {
           setSelectedDepartment(val || null)
+          setUserId('') // Clear user selection when department changes
         }}
         options={departmentOptions}
         placeholder='اختر القسم'
@@ -335,6 +372,27 @@ export function AppointmentForm({
         emptyMessage={departments.length === 0 ? 'جارٍ التحميل...' : 'لا يوجد أقسام'}
         required
         ariaLabel='اختر القسم'
+      />
+
+      {/* اختيار المستخدم - يظهر بعد اختيار القسم */}
+      <SearchableSelect
+        value={userId}
+        onValueChange={setUserId}
+        options={userOptions}
+        placeholder={selectedDepartment ? (loadingUsers ? 'جارٍ التحميل...' : 'اختر المستخدم') : 'اختر القسم أولاً'}
+        searchPlaceholder='ابحث عن مستخدم...'
+        emptyMessage={
+          !selectedDepartment
+            ? 'اختر القسم أولاً'
+            : loadingUsers
+              ? 'جارٍ التحميل...'
+              : departmentUsers.length === 0
+                ? 'لا يوجد مستخدمين في هذا القسم'
+                : 'لا يوجد نتائج'
+        }
+        required
+        disabled={!selectedDepartment || loadingUsers}
+        ariaLabel='اختر المستخدم'
       />
 
       {/* اختيار الخدمة */}

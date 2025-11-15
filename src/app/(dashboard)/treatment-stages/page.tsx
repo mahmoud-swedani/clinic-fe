@@ -193,9 +193,9 @@ function TreatmentStagesContent() {
                           const appointment = stage.appointment
                           if (!appointment) return 'غير معروف'
                           if (typeof appointment === 'object' && appointment !== null) {
-                            const patient = appointment.patient
-                            if (typeof patient === 'object' && patient !== null) {
-                              return patient.fullName || 'غير معروف'
+                            const client = appointment.client
+                            if (typeof client === 'object' && client !== null) {
+                              return client.fullName || 'غير معروف'
                             }
                           }
                           return 'غير معروف'

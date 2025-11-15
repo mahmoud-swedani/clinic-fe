@@ -8,6 +8,8 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import axios from '@/lib/axios'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 interface Branch {
   _id: string
@@ -29,6 +31,7 @@ export default function DepartmentForm({
   onSuccess,
 }: DepartmentFormProps) {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const [loading, setLoading] = useState(false)
   const [branches, setBranches] = useState<Branch[]>([])
   const [formData, setFormData] = useState({
@@ -92,6 +95,11 @@ export default function DepartmentForm({
         await axios.post('/departments', formData)
         toast.success('تم إضافة القسم بنجاح')
       }
+      
+      // Invalidate and refetch all departments queries to show the new/updated department immediately
+      queryClient.invalidateQueries({ queryKey: queryKeys.departments.all })
+      queryClient.refetchQueries({ queryKey: queryKeys.departments.all })
+      
       if (onSuccess) onSuccess()
       else router.push('/departments')
     } catch {

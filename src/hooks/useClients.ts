@@ -2,11 +2,11 @@ import { useQuery, useQueryClient, keepPreviousData } from '@tanstack/react-quer
 import { useEffect, useRef } from 'react'
 import axios from '@/lib/axios'
 import { queryKeys } from '@/lib/queryKeys'
-import { PaginatedResponse, Patient } from '@/types/api'
+import { PaginatedResponse, Client } from '@/types/api'
 import { usePagination } from './usePagination'
 import { isGloballyRateLimited, setGlobalRateLimited, cleanupExpiredRateLimit } from '@/lib/rateLimit'
 
-export const usePatients = (page?: number, limit?: number) => {
+export const useClients = (page?: number, limit?: number) => {
   const queryClient = useQueryClient()
   // Use provided pagination or fallback to internal pagination hook
   const internalPagination = usePagination(10)
@@ -29,9 +29,9 @@ export const usePatients = (page?: number, limit?: number) => {
   const isRateLimited = isGloballyRateLimited()
 
   const query = useQuery({
-    queryKey: queryKeys.patients.list({ page: currentPage, limit: currentLimit }),
+    queryKey: queryKeys.clients.list({ page: currentPage, limit: currentLimit }),
     queryFn: async () => {
-      const { data } = await axios.get<PaginatedResponse<Patient>>('/patients', {
+      const { data } = await axios.get<PaginatedResponse<Client>>('/clients', {
         params: { page: currentPage, limit: currentLimit },
       })
       return data // Return full PaginatedResponse
@@ -41,7 +41,7 @@ export const usePatients = (page?: number, limit?: number) => {
     refetchOnWindowFocus: false, // Don't refetch on window focus - polling handles updates
     refetchOnMount: () => {
       // Don't refetch on mount if we're rate limited
-      const state = queryClient.getQueryState(queryKeys.patients.list({ page: currentPage, limit: currentLimit }))
+      const state = queryClient.getQueryState(queryKeys.clients.list({ page: currentPage, limit: currentLimit }))
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const error = (state?.error as any)?.response?.status
       return error !== 429
@@ -68,7 +68,7 @@ export const usePatients = (page?: number, limit?: number) => {
 
     // Only poll when tab is visible
     const startPolling = () => {
-      const baseInterval = 60 * 1000 // Base polling interval: 60 seconds (patients change less frequently than appointments)
+      const baseInterval = 60 * 1000 // Base polling interval: 60 seconds (clients change less frequently than appointments)
       const pollInterval = baseInterval * backoffMultiplierRef.current
       
       intervalRef.current = setInterval(async () => {
@@ -87,7 +87,7 @@ export const usePatients = (page?: number, limit?: number) => {
               return
             }
             
-            const queryState = queryClient.getQueryState(queryKeys.patients.list({ page: currentPage, limit: currentLimit }))
+            const queryState = queryClient.getQueryState(queryKeys.clients.list({ page: currentPage, limit: currentLimit }))
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const error = queryState?.error as any
             if (error?.response?.status === 429) {
@@ -120,7 +120,7 @@ export const usePatients = (page?: number, limit?: number) => {
 
             if (shouldRefetch) {
               // Check if query is already fetching to avoid concurrent refetches
-              const currentQueryState = queryClient.getQueryState(queryKeys.patients.list({ page: currentPage, limit: currentLimit }))
+              const currentQueryState = queryClient.getQueryState(queryKeys.clients.list({ page: currentPage, limit: currentLimit }))
               if (currentQueryState?.fetchStatus === 'fetching') {
                 // Query is already fetching, skip this poll cycle to avoid race conditions
                 return
@@ -129,7 +129,7 @@ export const usePatients = (page?: number, limit?: number) => {
               // Force refetch - this will update the UI immediately
               try {
                 await queryClient.refetchQueries({ 
-                  queryKey: queryKeys.patients.list({ page: currentPage, limit: currentLimit }),
+                  queryKey: queryKeys.clients.list({ page: currentPage, limit: currentLimit }),
                   type: 'active' // Refetch active queries
                 })
                 
@@ -198,14 +198,14 @@ export const usePatients = (page?: number, limit?: number) => {
         backoffMultiplierRef.current = 1 // Reset backoff when tab becomes visible
         startPolling()
         // Immediately refetch when tab becomes visible if data is missing or older than 60 seconds (and not rate limited)
-        const queryState = queryClient.getQueryState(queryKeys.patients.list({ page, limit }))
+        const queryState = queryClient.getQueryState(queryKeys.clients.list({ page, limit }))
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const error = queryState?.error as any
         const isRateLimited = error?.response?.status === 429
         if (!isRateLimited && (!queryState?.data || 
             (queryState?.dataUpdatedAt && Date.now() - queryState.dataUpdatedAt > 60 * 1000))) {
           queryClient.refetchQueries({ 
-            queryKey: queryKeys.patients.list({ page, limit }),
+            queryKey: queryKeys.clients.list({ page, limit }),
             type: 'active'
           })
         }

@@ -13,19 +13,19 @@ import moment from 'moment'
 
 moment.locale('ar')
 
-interface PatientActivitiesProps {
-  patientId: string
+interface ClientActivitiesProps {
+  clientId: string
 }
 
-export function PatientActivities({ patientId }: PatientActivitiesProps) {
+export function ClientActivities({ clientId }: ClientActivitiesProps) {
   const [showAll, setShowAll] = useState(false)
   const { data: activities, isLoading, isError } = useQuery({
-    queryKey: ['patient-activities', patientId],
+    queryKey: ['client-activities', clientId],
     queryFn: async () => {
-      const { data } = await axios.get(`/audit-logs/patients/${patientId}`)
+      const { data } = await axios.get(`/audit-logs/clients/${clientId}`)
       return (data?.data || []) as AuditLog[]
     },
-    enabled: !!patientId,
+    enabled: !!clientId,
   })
 
   // Get activities to display
@@ -102,7 +102,7 @@ export function PatientActivities({ patientId }: PatientActivitiesProps) {
       baselineVitals: 'العلامات الحيوية الأساسية',
       appointmentAdherence: 'الالتزام بالمواعيد',
       improvementNotes: 'ملاحظات التحسن',
-      patientClassification: 'تصنيف المريض',
+      clientClassification: 'تصنيف العميل',
     }
     return fieldNames[field] || field
   }
@@ -211,7 +211,7 @@ export function PatientActivities({ patientId }: PatientActivitiesProps) {
           <CardTitle>سجل الأنشطة</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className='text-gray-500 text-center py-8'>لا توجد أنشطة مسجلة لهذا المريض</p>
+          <p className='text-gray-500 text-center py-8'>لا توجد أنشطة مسجلة لهذا العميل</p>
         </CardContent>
       </Card>
     )

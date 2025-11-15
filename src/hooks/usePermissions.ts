@@ -165,9 +165,9 @@ export function useUserPermissions() {
       permissions.includes('financial.edit') ||
       permissions.includes('financial-records.edit') ||
       permissions.includes('invoices.edit'),
-    canManagePatients:
-      permissions.includes('patients.create') ||
-      permissions.includes('patients.edit'),
+    canManageClients:
+      permissions.includes('clients.create') ||
+      permissions.includes('clients.edit'),
     canManageAppointments:
       permissions.includes('appointments.create') ||
       permissions.includes('appointments.edit'),
@@ -199,11 +199,11 @@ export function useUserPermissions() {
       permissions.includes('services.create') ||
       permissions.includes('services.edit'),
 
-    // Patient detail page permissions
-    canViewPatientAppointments: permissions.includes('patients.view-appointments'),
-    canViewPatientTreatmentStages: permissions.includes('patients.view-treatment-stages'),
-    canViewPatientSales: permissions.includes('patients.view-sales'),
-    canViewPatientActivities: permissions.includes('patients.view-activities'),
+    // Client detail page permissions
+    canViewClientAppointments: permissions.includes('clients.view-appointments') || permissions.includes('patients.view-appointments'), // Support both for backward compatibility
+    canViewClientTreatmentStages: permissions.includes('clients.view-treatment-stages') || permissions.includes('patients.view-treatment-stages'), // Support both for backward compatibility
+    canViewClientSales: permissions.includes('clients.view-sales') || permissions.includes('patients.view-sales'), // Support both for backward compatibility
+    canViewClientActivities: permissions.includes('clients.view-activities') || permissions.includes('patients.view-activities'), // Support both for backward compatibility
 
     // User role
     role: user?.role,

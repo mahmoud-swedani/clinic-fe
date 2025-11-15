@@ -11,9 +11,12 @@ import { Button } from '@/components/ui/button'
 import { ChevronLeft } from 'lucide-react'
 import { useDepartments } from '@/hooks/useDepartments'
 import { Service, Department, PaginatedResponse } from '@/types/api'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 function EditServiceContent() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { id } = useParams() as { id?: string }
   const [service, setService] = useState<Service | null>(null)
   const [loading, setLoading] = useState(true)
@@ -49,6 +52,11 @@ function EditServiceContent() {
     try {
       await axios.put(`/services/${id}`, formData)
       toast.success('تم تعديل الخدمة بنجاح')
+      
+      // Invalidate and refetch all services queries to show the updated service immediately
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.all })
+      queryClient.refetchQueries({ queryKey: queryKeys.services.all })
+      
       router.push(`/services/${id}`)
     } catch {
       toast.error('حدث خطأ أثناء تعديل الخدمة')

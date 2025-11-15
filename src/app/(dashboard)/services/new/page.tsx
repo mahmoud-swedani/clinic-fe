@@ -11,9 +11,12 @@ import { useDepartments } from '@/hooks/useDepartments'
 import { Service, Department, PaginatedResponse } from '@/types/api'
 import axios from '@/lib/axios'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 function NewServiceContent() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const { data: departmentsResponse, isLoading } = useDepartments()
   
   const typedDepartmentsResponse = departmentsResponse as PaginatedResponse<Department> | undefined
@@ -24,6 +27,11 @@ function NewServiceContent() {
     try {
       await axios.post('/services', formData)
       toast.success('تمت إضافة الخدمة بنجاح')
+      
+      // Invalidate and refetch all services queries to show the new service immediately
+      queryClient.invalidateQueries({ queryKey: queryKeys.services.all })
+      queryClient.refetchQueries({ queryKey: queryKeys.services.all })
+      
       router.push('/services')
     } catch {
       toast.error('حدث خطأ أثناء إضافة الخدمة')

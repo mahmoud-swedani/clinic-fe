@@ -60,7 +60,7 @@ export default function ServiceDetailsPage() {
       )}
 
       <p className='text-muted-foreground'>{service.description}</p>
-      <p className='text-lg font-medium'>السعر: {service.price} ر.س</p>
+      <p className='text-lg font-medium'>السعر: {service.price} ل.س</p>
       <p className='text-lg'>المدة: {service.duration} دقيقة</p>
       <p className='text-lg'>
         الحالة:{' '}

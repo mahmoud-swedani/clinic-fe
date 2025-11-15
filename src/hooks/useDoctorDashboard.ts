@@ -60,14 +60,14 @@ export function usePastAppointments() {
 }
 
 /**
- * Hook to get patient statistics for the current doctor
+ * Hook to get client statistics for the current doctor
  */
-export function useDoctorPatientStats() {
+export function useDoctorClientStats() {
   const { data: user, isLoading: userLoading } = useCurrentUser()
   const doctorId = user?._id || user?.id
 
   return useQuery({
-    queryKey: ['doctor', 'patient-stats', doctorId],
+    queryKey: ['doctor', 'client-stats', doctorId],
     queryFn: async () => {
       // Get appointments for this doctor (backend filters by doctor)
       const { data: appointmentsData } = await axios.get<PaginatedResponse<Appointment>>(
@@ -81,12 +81,12 @@ export function useDoctorPatientStats() {
       )
 
       const appointments = appointmentsData.data || []
-      const uniquePatientIds = new Set(
+      const uniqueClientIds = new Set(
         appointments.map((apt: Appointment) => {
-          const patient = apt.patient
-          return typeof patient === 'object' && patient !== null && '_id' in patient
-            ? patient._id
-            : typeof patient === 'string' ? patient : null
+          const client = apt.client
+          return typeof client === 'object' && client !== null && '_id' in client
+            ? client._id
+            : typeof client === 'string' ? client : null
         }).filter((id): id is string => Boolean(id))
       )
 
@@ -118,7 +118,7 @@ export function useDoctorPatientStats() {
           : 0
 
       return {
-        totalPatients: uniquePatientIds.size,
+        totalClients: uniqueClientIds.size,
         totalAppointments: appointments.length,
         totalTreatmentStages: doctorStages.length,
         completedStages: completedStages.length,

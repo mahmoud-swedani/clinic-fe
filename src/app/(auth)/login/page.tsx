@@ -54,6 +54,7 @@ export default function LoginPage() {
             email: string
             role: string
             branch?: string
+            permissions?: string[]
           }
         }
         message: string
@@ -62,9 +63,26 @@ export default function LoginPage() {
       // Token is automatically stored in httpOnly cookie by backend
       // No need to store in localStorage or client-side cookies
 
-      // Cache user data immediately for faster subsequent access
+      // Cache user data with permissions immediately for faster subsequent access
       if (response.data?.data?.user) {
-        queryClient.setQueryData(queryKeys.currentUser.me(), response.data.data.user)
+        const userWithPermissions = {
+          ...response.data.data.user,
+          permissions: response.data.data.user.permissions || []
+        }
+        queryClient.setQueryData(queryKeys.currentUser.me(), userWithPermissions)
+        
+        // Verify permissions are present before redirect
+        // For Owner/Manager, permissions might be empty but they see all items anyway
+        // For other roles, ensure permissions array exists (even if empty)
+        const userRole = userWithPermissions.role
+        if (userRole !== 'مالك' && userRole !== 'مدير') {
+          // For non-owner/manager roles, permissions should be present
+          // If permissions array is missing (undefined), log warning but proceed
+          // The sidebar will handle empty permissions array gracefully
+          if (userWithPermissions.permissions === undefined) {
+            console.warn('User logged in without permissions array - will fetch from /auth/me')
+          }
+        }
       }
 
       // Get user role from response and redirect to role-specific dashboard

@@ -1,33 +1,33 @@
-// src/hooks/usePatientImmunizations.ts
+// src/hooks/useClientImmunizations.ts
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import axios from '@/lib/axios'
-import { PatientImmunization, PaginatedResponse } from '@/types/api'
+import { ClientImmunization, PaginatedResponse } from '@/types/api'
 import { toast } from 'sonner'
 
-export function usePatientImmunizations(patientId: string, page: number = 1, limit: number = 50) {
+export function useClientImmunizations(clientId: string, page: number = 1, limit: number = 50) {
   return useQuery({
-    queryKey: ['patient-immunizations', patientId, page, limit],
+    queryKey: ['client-immunizations', clientId, page, limit],
     queryFn: async () => {
-      const { data } = await axios.get<PaginatedResponse<PatientImmunization>>(
-        `/patients/${patientId}/immunizations`,
+      const { data } = await axios.get<PaginatedResponse<ClientImmunization>>(
+        `/clients/${clientId}/immunizations`,
         { params: { page, limit } }
       )
       return data
     },
-    enabled: !!patientId,
+    enabled: !!clientId,
   })
 }
 
-export function useCreatePatientImmunization() {
+export function useCreateClientImmunization() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ patientId, immunizationData }: { patientId: string; immunizationData: Partial<PatientImmunization> }) => {
-      const { data } = await axios.post(`/patients/${patientId}/immunizations`, immunizationData)
+    mutationFn: async ({ clientId, immunizationData }: { clientId: string; immunizationData: Partial<ClientImmunization> }) => {
+      const { data } = await axios.post(`/clients/${clientId}/immunizations`, immunizationData)
       return data
     },
     onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['patient-immunizations', variables.patientId] })
+      queryClient.invalidateQueries({ queryKey: ['client-immunizations', variables.clientId] })
       toast.success('تم إضافة سجل التطعيم بنجاح ✅')
     },
     onError: () => {
@@ -36,18 +36,18 @@ export function useCreatePatientImmunization() {
   })
 }
 
-export function useUpdatePatientImmunization() {
+export function useUpdateClientImmunization() {
   const queryClient = useQueryClient()
 
   return useMutation({
-    mutationFn: async ({ id, immunizationData }: { id: string; immunizationData: Partial<PatientImmunization> }) => {
+    mutationFn: async ({ id, immunizationData }: { id: string; immunizationData: Partial<ClientImmunization> }) => {
       const { data } = await axios.put(`/immunizations/${id}`, immunizationData)
       return data
     },
     onSuccess: (data) => {
-      const patientId = data?.data?.patient?._id || data?.data?.patient
-      if (patientId) {
-        queryClient.invalidateQueries({ queryKey: ['patient-immunizations', patientId] })
+      const clientId = data?.data?.client?._id || data?.data?.client
+      if (clientId) {
+        queryClient.invalidateQueries({ queryKey: ['client-immunizations', clientId] })
       }
       toast.success('تم تحديث سجل التطعيم بنجاح ✅')
     },
@@ -57,7 +57,7 @@ export function useUpdatePatientImmunization() {
   })
 }
 
-export function useDeletePatientImmunization() {
+export function useDeleteClientImmunization() {
   const queryClient = useQueryClient()
 
   return useMutation({
@@ -66,9 +66,9 @@ export function useDeletePatientImmunization() {
       return data
     },
     onSuccess: (data) => {
-      const patientId = data?.data?.patient?._id || data?.data?.patient
-      if (patientId) {
-        queryClient.invalidateQueries({ queryKey: ['patient-immunizations', patientId] })
+      const clientId = data?.data?.client?._id || data?.data?.client
+      if (clientId) {
+        queryClient.invalidateQueries({ queryKey: ['client-immunizations', clientId] })
       }
       toast.success('تم حذف سجل التطعيم بنجاح ✅')
     },

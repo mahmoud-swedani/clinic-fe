@@ -1,4 +1,4 @@
-// src/components/patients/patient-immunizations.tsx
+// src/components/clients/client-test-results.tsx
 'use client'
 
 import React, { useState } from 'react'
@@ -15,52 +15,54 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
-import { usePatientImmunizations, useCreatePatientImmunization, useUpdatePatientImmunization, useDeletePatientImmunization } from '@/hooks/usePatientImmunizations'
-import { PatientImmunization } from '@/types/api'
+import { useClientTestResults, useCreateClientTestResult, useUpdateClientTestResult, useDeleteClientTestResult } from '@/hooks/useClientTestResults'
+import { ClientTestResult } from '@/types/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import moment from 'moment'
 
 moment.locale('ar')
 
-interface PatientImmunizationsProps {
-  patientId: string
+interface ClientTestResultsProps {
+  clientId: string
 }
 
-export function PatientImmunizations({ patientId }: PatientImmunizationsProps) {
+export function ClientTestResults({ clientId }: ClientTestResultsProps) {
   const [openDialog, setOpenDialog] = useState(false)
-  const [editingImmunization, setEditingImmunization] = useState<PatientImmunization | null>(null)
+  const [editingTestResult, setEditingTestResult] = useState<ClientTestResult | null>(null)
   const [formData, setFormData] = useState({
-    vaccineName: '',
-    date: '',
-    batchNumber: '',
-    nextDueDate: '',
+    testName: '',
+    testDate: '',
+    results: '',
+    doctor: '',
     notes: '',
   })
 
-  const { data, isLoading } = usePatientImmunizations(patientId)
-  const createMutation = useCreatePatientImmunization()
-  const updateMutation = useUpdatePatientImmunization()
-  const deleteMutation = useDeletePatientImmunization()
+  const { data, isLoading } = useClientTestResults(clientId)
+  const createMutation = useCreateClientTestResult()
+  const updateMutation = useUpdateClientTestResult()
+  const deleteMutation = useDeleteClientTestResult()
 
-  const immunizations = data?.data || []
+  const testResults = data?.data || []
 
-  const handleOpenDialog = (immunization?: PatientImmunization) => {
-    if (immunization) {
-      setEditingImmunization(immunization)
+  const handleOpenDialog = (testResult?: ClientTestResult) => {
+    if (testResult) {
+      setEditingTestResult(testResult)
       setFormData({
-        vaccineName: immunization.vaccineName || '',
-        date: immunization.date ? moment(immunization.date).format('YYYY-MM-DD') : '',
-        batchNumber: immunization.batchNumber || '',
-        nextDueDate: immunization.nextDueDate ? moment(immunization.nextDueDate).format('YYYY-MM-DD') : '',
-        notes: immunization.notes || '',
+        testName: testResult.testName || '',
+        testDate: testResult.testDate ? moment(testResult.testDate).format('YYYY-MM-DD') : '',
+        results: testResult.results || '',
+        doctor: typeof testResult.doctor === 'object' && testResult.doctor !== null
+          ? testResult.doctor._id
+          : testResult.doctor || '',
+        notes: testResult.notes || '',
       })
     } else {
-      setEditingImmunization(null)
+      setEditingTestResult(null)
       setFormData({
-        vaccineName: '',
-        date: '',
-        batchNumber: '',
-        nextDueDate: '',
+        testName: '',
+        testDate: '',
+        results: '',
+        doctor: '',
         notes: '',
       })
     }
@@ -69,29 +71,29 @@ export function PatientImmunizations({ patientId }: PatientImmunizationsProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!formData.vaccineName || !formData.date) {
+    if (!formData.testName || !formData.testDate || !formData.results) {
       return
     }
 
-    const immunizationData = {
+    const testResultData = {
       ...formData,
-      nextDueDate: formData.nextDueDate || undefined,
+      doctor: formData.doctor || undefined,
     }
 
-    if (editingImmunization) {
+    if (editingTestResult) {
       await updateMutation.mutateAsync({
-        id: editingImmunization._id,
-        immunizationData,
+        id: editingTestResult._id,
+        testResultData,
       })
     } else {
       await createMutation.mutateAsync({
-        patientId,
-        immunizationData,
+        clientId,
+        testResultData,
       })
     }
 
     setOpenDialog(false)
-    setEditingImmunization(null)
+    setEditingTestResult(null)
   }
 
   const handleDelete = async (id: string) => {
@@ -104,57 +106,59 @@ export function PatientImmunizations({ patientId }: PatientImmunizationsProps) {
     <Card>
       <CardHeader>
         <div className='flex justify-between items-center'>
-          <CardTitle>سجلات التطعيمات</CardTitle>
+          <CardTitle>نتائج الفحوصات</CardTitle>
           <Dialog open={openDialog} onOpenChange={setOpenDialog}>
             <DialogTrigger asChild>
               <Button size='sm' onClick={() => handleOpenDialog()}>
                 <Plus className='w-4 h-4 mr-1' />
-                إضافة تطعيم
+                إضافة نتيجة فحص
               </Button>
             </DialogTrigger>
             <DialogContent className='max-w-2xl' dir='rtl'>
               <DialogHeader>
                 <DialogTitle>
-                  {editingImmunization ? 'تعديل سجل التطعيم' : 'إضافة سجل تطعيم جديد'}
+                  {editingTestResult ? 'تعديل نتيجة الفحص' : 'إضافة نتيجة فحص جديدة'}
                 </DialogTitle>
               </DialogHeader>
               <form onSubmit={handleSubmit} className='space-y-4'>
                 <div>
-                  <Label htmlFor='vaccineName'>اسم اللقاح *</Label>
+                  <Label htmlFor='testName'>اسم الفحص *</Label>
                   <Input
-                    id='vaccineName'
-                    value={formData.vaccineName}
-                    onChange={(e) => setFormData({ ...formData, vaccineName: e.target.value })}
+                    id='testName'
+                    value={formData.testName}
+                    onChange={(e) => setFormData({ ...formData, testName: e.target.value })}
                     required
                   />
                 </div>
                 <div className='grid grid-cols-2 gap-4'>
                   <div>
-                    <Label htmlFor='date'>تاريخ التطعيم *</Label>
+                    <Label htmlFor='testDate'>تاريخ الفحص *</Label>
                     <Input
-                      id='date'
+                      id='testDate'
                       type='date'
-                      value={formData.date}
-                      onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                      value={formData.testDate}
+                      onChange={(e) => setFormData({ ...formData, testDate: e.target.value })}
                       required
                     />
                   </div>
                   <div>
-                    <Label htmlFor='batchNumber'>رقم الدفعة</Label>
+                    <Label htmlFor='doctor'>الطبيب</Label>
                     <Input
-                      id='batchNumber'
-                      value={formData.batchNumber}
-                      onChange={(e) => setFormData({ ...formData, batchNumber: e.target.value })}
+                      id='doctor'
+                      value={formData.doctor}
+                      onChange={(e) => setFormData({ ...formData, doctor: e.target.value })}
+                      placeholder='معرف الطبيب'
                     />
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor='nextDueDate'>تاريخ الجرعة القادمة</Label>
-                  <Input
-                    id='nextDueDate'
-                    type='date'
-                    value={formData.nextDueDate}
-                    onChange={(e) => setFormData({ ...formData, nextDueDate: e.target.value })}
+                  <Label htmlFor='results'>النتائج *</Label>
+                  <Textarea
+                    id='results'
+                    value={formData.results}
+                    onChange={(e) => setFormData({ ...formData, results: e.target.value })}
+                    rows={4}
+                    required
                   />
                 </div>
                 <div>
@@ -171,7 +175,7 @@ export function PatientImmunizations({ patientId }: PatientImmunizationsProps) {
                     إلغاء
                   </Button>
                   <Button type='submit' disabled={createMutation.isPending || updateMutation.isPending}>
-                    {editingImmunization ? 'تحديث' : 'إضافة'}
+                    {editingTestResult ? 'تحديث' : 'إضافة'}
                   </Button>
                 </div>
               </form>
@@ -186,39 +190,47 @@ export function PatientImmunizations({ patientId }: PatientImmunizationsProps) {
               <Skeleton key={i} className='h-20 w-full' />
             ))}
           </div>
-        ) : immunizations.length > 0 ? (
+        ) : testResults.length > 0 ? (
           <div className='space-y-3'>
-            {immunizations.map((immunization) => (
+            {testResults.map((testResult) => (
               <div
-                key={immunization._id}
+                key={testResult._id}
                 className='border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors'
               >
                 <div className='flex justify-between items-start'>
                   <div className='flex-1'>
-                    <h4 className='font-semibold text-lg'>{immunization.vaccineName}</h4>
+                    <h4 className='font-semibold text-lg'>{testResult.testName}</h4>
                     <div className='grid grid-cols-2 gap-2 mt-2 text-sm text-gray-600'>
-                      <p>التاريخ: {moment(immunization.date).format('YYYY-MM-DD')}</p>
-                      {immunization.batchNumber && <p>رقم الدفعة: {immunization.batchNumber}</p>}
-                      {immunization.nextDueDate && (
-                        <p>الجرعة القادمة: {moment(immunization.nextDueDate).format('YYYY-MM-DD')}</p>
+                      <p>التاريخ: {moment(testResult.testDate).format('YYYY-MM-DD')}</p>
+                      {testResult.doctor && (
+                        <p>
+                          الطبيب:{' '}
+                          {typeof testResult.doctor === 'object' && testResult.doctor !== null
+                            ? testResult.doctor.name
+                            : testResult.doctor}
+                        </p>
                       )}
                     </div>
-                    {immunization.notes && (
-                      <p className='text-sm text-gray-500 mt-1'>ملاحظات: {immunization.notes}</p>
+                    <div className='mt-2'>
+                      <p className='text-sm font-medium text-gray-700'>النتائج:</p>
+                      <p className='text-sm text-gray-600 whitespace-pre-wrap'>{testResult.results}</p>
+                    </div>
+                    {testResult.notes && (
+                      <p className='text-sm text-gray-500 mt-1'>ملاحظات: {testResult.notes}</p>
                     )}
                   </div>
                   <div className='flex gap-2'>
                     <Button
                       variant='outline'
                       size='sm'
-                      onClick={() => handleOpenDialog(immunization)}
+                      onClick={() => handleOpenDialog(testResult)}
                     >
                       <Pencil className='w-4 h-4' />
                     </Button>
                     <Button
                       variant='outline'
                       size='sm'
-                      onClick={() => handleDelete(immunization._id)}
+                      onClick={() => handleDelete(testResult._id)}
                     >
                       <Trash2 className='w-4 h-4' />
                     </Button>
@@ -228,7 +240,7 @@ export function PatientImmunizations({ patientId }: PatientImmunizationsProps) {
             ))}
           </div>
         ) : (
-          <p className='text-center text-gray-500 py-8'>لا توجد سجلات تطعيمات</p>
+          <p className='text-center text-gray-500 py-8'>لا توجد نتائج فحوصات</p>
         )}
       </CardContent>
     </Card>

@@ -1,13 +1,13 @@
 'use client'
 
 import React, { useState, useMemo, useEffect, useRef } from 'react'
-import { usePatientDetails } from '@/hooks/usePatientDetails'
-import { usePatientAppointments } from '@/hooks/usePatientAppointments'
+import { useClientDetails } from '@/hooks/useClientDetails'
+import { useClientAppointments } from '@/hooks/useClientAppointments'
 import { useUserPermissions } from '@/hooks/usePermissions'
-import { PatientActivities } from '@/components/patients/patient-activities'
+import { ClientActivities } from '@/components/clients/client-activities'
 import { Loader2, CheckCircle2, XCircle, Filter, Pencil } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { TreatmentStage, Sale, SaleItem, Patient, Appointment } from '@/types/api'
+import { TreatmentStage, Sale, SaleItem, Client, Appointment } from '@/types/api'
 import { useQuery } from '@tanstack/react-query'
 import axios from '@/lib/axios'
 import { Button } from '@/components/ui/button'
@@ -25,19 +25,19 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog'
 
-type PatientDetailsClientProps = {
+type ClientDetailsClientProps = {
   id: string
 }
 
-const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
+const ClientDetailsClient: React.FC<ClientDetailsClientProps> = ({ id }) => {
   const router = useRouter()
-  const { data, isLoading, isError } = usePatientDetails(id)
-  const { data: appointments, isLoading: appointmentsLoading } = usePatientAppointments(id)
+  const { data, isLoading, isError } = useClientDetails(id)
+  const { data: appointments, isLoading: appointmentsLoading } = useClientAppointments(id)
   const {
-    canViewPatientAppointments,
-    canViewPatientTreatmentStages,
-    canViewPatientSales,
-    canViewPatientActivities,
+    canViewClientAppointments,
+    canViewClientTreatmentStages,
+    canViewClientSales,
+    canViewClientActivities,
     hasPermission,
     permissions,
   } = useUserPermissions()
@@ -45,7 +45,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
   // Add fallback permission checks for tabs
   const canViewAppointmentsTab = useMemo(() => {
     return (
-      canViewPatientAppointments ||
+      canViewClientAppointments ||
       hasPermission('appointments.view') ||
       hasPermission('appointments.create') ||
       hasPermission('appointments.edit') ||
@@ -53,11 +53,11 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
       permissions.includes('appointments.create') ||
       permissions.includes('appointments.edit')
     )
-  }, [canViewPatientAppointments, hasPermission, permissions])
+  }, [canViewClientAppointments, hasPermission, permissions])
   
   const canViewTreatmentStagesTab = useMemo(() => {
     return (
-      canViewPatientTreatmentStages ||
+      canViewClientTreatmentStages ||
       hasPermission('treatment-stages.view') ||
       hasPermission('treatment-stages.create') ||
       hasPermission('treatment-stages.edit') ||
@@ -65,11 +65,11 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
       permissions.includes('treatment-stages.create') ||
       permissions.includes('treatment-stages.edit')
     )
-  }, [canViewPatientTreatmentStages, hasPermission, permissions])
+  }, [canViewClientTreatmentStages, hasPermission, permissions])
   
   const canViewSalesTab = useMemo(() => {
     return (
-      canViewPatientSales ||
+      canViewClientSales ||
       hasPermission('sales.view') ||
       hasPermission('sales.create') ||
       hasPermission('sales.edit') ||
@@ -77,7 +77,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
       permissions.includes('sales.create') ||
       permissions.includes('sales.edit')
     )
-  }, [canViewPatientSales, hasPermission, permissions])
+  }, [canViewClientSales, hasPermission, permissions])
   
   const canEditStage = hasPermission('treatment-stages.edit')
   const [search, setSearch] = useState('')
@@ -87,7 +87,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
   >('all')
   const [openEditStage, setOpenEditStage] = useState(false)
   const [selectedStage, setSelectedStage] = useState<TreatmentStage | null>(null)
-  const { refetch: refetchPatientDetails } = usePatientDetails(id)
+  const { refetch: refetchClientDetails } = useClientDetails(id)
   
   // Determine available tabs based on permissions
   const availableTabs = useMemo(() => {
@@ -107,11 +107,11 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
     }
   }, [availableTabs, activeTab])
 
-  // Fetch patient details
-  const { data: patientData } = useQuery({
-    queryKey: ['patient', id],
+  // Fetch client details
+  const { data: clientData } = useQuery({
+    queryKey: ['client', id],
     queryFn: async () => {
-      const { data } = await axios.get<{ data: Patient }>(`/patients/${id}`)
+      const { data } = await axios.get<{ data: Client }>(`/clients/${id}`)
       return data.data
     },
     enabled: !!id,
@@ -168,28 +168,28 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
   if (isError)
     return (
       <div className='text-red-600 text-center py-10 font-semibold'>
-        حدث خطأ أثناء جلب بيانات المريض.
+        حدث خطأ أثناء جلب بيانات العميل.
       </div>
     )
 
   if (!data)
     return (
       <div className='text-gray-600 text-center py-10 font-medium'>
-        لا توجد بيانات متاحة للمريض.
+        لا توجد بيانات متاحة للعميل.
       </div>
     )
 
   return (
     <section className='space-y-6'>
       {/* Header with Edit Button */}
-      {patientData && hasPermission('patients.edit') && (
+      {clientData && hasPermission('clients.edit') && (
         <div className='flex justify-end'>
           <Button
-            onClick={() => router.push(`/patients/${id}/edit`)}
+            onClick={() => router.push(`/clients/${id}/edit`)}
             className='gap-2'
           >
             <Pencil className='w-4 h-4' />
-            تعديل بيانات المريض
+            تعديل بيانات العميل
           </Button>
         </div>
       )}
@@ -199,7 +199,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
         onValueChange={(val) => setActiveTab(val as 'info' | 'appointments' | 'stages' | 'sales')}
       >
         <TabsList className='mb-4 border-b border-gray-200 dark:border-gray-700'>
-          <TabsTrigger value='info'>معلومات المريض</TabsTrigger>
+          <TabsTrigger value='info'>معلومات العميل</TabsTrigger>
           {canViewAppointmentsTab && (
             <TabsTrigger value='appointments'>المواعيد</TabsTrigger>
           )}
@@ -211,133 +211,133 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
           )}
         </TabsList>
 
-        {/* Patient Information Tab */}
+        {/* Client Information Tab */}
         <TabsContent value='info'>
-          {patientData && (
+          {clientData && (
             <Card>
               <CardHeader>
-                <CardTitle>معلومات المريض</CardTitle>
+                <CardTitle>معلومات العميل</CardTitle>
               </CardHeader>
               <CardContent className='space-y-6'>
                 <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
-                  {patientData.refNumber && (
+                  {clientData.refNumber && (
                     <div>
                       <p className='text-sm text-gray-600'>رقم الملف</p>
-                      <p className='font-semibold font-mono'>{patientData.refNumber}</p>
+                      <p className='font-semibold font-mono'>{clientData.refNumber}</p>
                     </div>
                   )}
                   <div>
                     <p className='text-sm text-gray-600'>الاسم الكامل</p>
-                    <p className='font-semibold'>{patientData.fullName}</p>
+                    <p className='font-semibold'>{clientData.fullName}</p>
                   </div>
                   <div>
                     <p className='text-sm text-gray-600'>رقم الهاتف</p>
-                    <p className='font-semibold'>{patientData.phone}</p>
+                    <p className='font-semibold'>{clientData.phone}</p>
                   </div>
                   <div>
                     <p className='text-sm text-gray-600'>الجنس</p>
-                    <p className='font-semibold'>{patientData.gender === 'male' ? 'ذكر' : 'أنثى'}</p>
+                    <p className='font-semibold'>{clientData.gender === 'male' ? 'ذكر' : 'أنثى'}</p>
                   </div>
-                  {patientData.dateOfBirth && (
+                  {clientData.dateOfBirth && (
                     <div>
                       <p className='text-sm text-gray-600'>تاريخ الميلاد</p>
                       <p className='font-semibold'>
-                        {new Date(patientData.dateOfBirth).toLocaleDateString('ar-EG')}
+                        {new Date(clientData.dateOfBirth).toLocaleDateString('ar-EG')}
                       </p>
                     </div>
                   )}
-                  {patientData.nationality && (
+                  {clientData.nationality && (
                     <div>
                       <p className='text-sm text-gray-600'>الجنسية</p>
-                      <p className='font-semibold'>{patientData.nationality}</p>
+                      <p className='font-semibold'>{clientData.nationality}</p>
                     </div>
                   )}
-                  {patientData.email && (
+                  {clientData.email && (
                     <div>
                       <p className='text-sm text-gray-600'>البريد الإلكتروني</p>
-                      <p className='font-semibold'>{patientData.email}</p>
+                      <p className='font-semibold'>{clientData.email}</p>
                     </div>
                   )}
-                  {patientData.patientClassification && (
+                  {clientData.clientClassification && (
                     <div>
                       <p className='text-sm text-gray-600'>التصنيف</p>
                       <p className='font-semibold'>
-                        {patientData.patientClassification === 'new'
+                        {clientData.clientClassification === 'new'
                           ? 'جديد'
-                          : patientData.patientClassification === 'regular'
+                          : clientData.clientClassification === 'regular'
                             ? 'عادي'
-                            : patientData.patientClassification === 'chronic'
+                            : clientData.clientClassification === 'chronic'
                               ? 'مزمن'
                               : 'VIP'}
                       </p>
                     </div>
                   )}
                 </div>
-                {patientData.address && (
+                {clientData.address && (
                   <div>
                     <p className='text-sm text-gray-600 mb-2'>العنوان</p>
                     <p className='font-semibold'>
-                      {typeof patientData.address === 'string'
-                        ? patientData.address
-                        : `${patientData.address.city || ''} ${patientData.address.region || ''} ${patientData.address.street || ''}`.trim() || '-'}
+                      {typeof clientData.address === 'string'
+                        ? clientData.address
+                        : `${clientData.address.city || ''} ${clientData.address.region || ''} ${clientData.address.street || ''}`.trim() || '-'}
                     </p>
                   </div>
                 )}
-                {patientData.emergencyContact && (
+                {clientData.emergencyContact && (
                   <div>
                     <p className='text-sm text-gray-600 mb-2'>جهة الاتصال في حالات الطوارئ</p>
                     <p className='font-semibold'>
-                      {patientData.emergencyContact.name || '-'} - {patientData.emergencyContact.phone || '-'} ({patientData.emergencyContact.relationship || '-'})
+                      {clientData.emergencyContact.name || '-'} - {clientData.emergencyContact.phone || '-'} ({clientData.emergencyContact.relationship || '-'})
                     </p>
                   </div>
                 )}
-                {patientData.primaryReasonForVisit && (
+                {clientData.primaryReasonForVisit && (
                   <div>
                     <p className='text-sm text-gray-600 mb-2'>السبب الرئيسي للزيارة</p>
-                    <p className='font-semibold'>{patientData.primaryReasonForVisit}</p>
+                    <p className='font-semibold'>{clientData.primaryReasonForVisit}</p>
                   </div>
                 )}
-                {patientData.currentMedicalHistory && (
+                {clientData.currentMedicalHistory && (
                   <div>
                     <p className='text-sm text-gray-600 mb-2'>التاريخ الطبي الحالي</p>
-                    <p className='font-semibold whitespace-pre-wrap'>{patientData.currentMedicalHistory}</p>
+                    <p className='font-semibold whitespace-pre-wrap'>{clientData.currentMedicalHistory}</p>
                   </div>
                 )}
-                {patientData.allergies && patientData.allergies.length > 0 && (
+                {clientData.allergies && clientData.allergies.length > 0 && (
                   <div>
                     <p className='text-sm text-gray-600 mb-2'>الحساسيات</p>
-                    <p className='font-semibold'>{patientData.allergies.join(', ')}</p>
+                    <p className='font-semibold'>{clientData.allergies.join(', ')}</p>
                   </div>
                 )}
-                {patientData.chronicDiseases && patientData.chronicDiseases.length > 0 && (
+                {clientData.chronicDiseases && clientData.chronicDiseases.length > 0 && (
                   <div>
                     <p className='text-sm text-gray-600 mb-2'>الأمراض المزمنة</p>
-                    <p className='font-semibold'>{patientData.chronicDiseases.join(', ')}</p>
+                    <p className='font-semibold'>{clientData.chronicDiseases.join(', ')}</p>
                   </div>
                 )}
-                {patientData.baselineVitals && (
+                {clientData.baselineVitals && (
                   <div>
                     <p className='text-sm text-gray-600 mb-2'>القياسات الأساسية</p>
                     <div className='grid grid-cols-2 gap-2'>
-                      {patientData.baselineVitals.bloodPressure && (
-                        <p className='font-semibold'>ضغط الدم: {patientData.baselineVitals.bloodPressure}</p>
+                      {clientData.baselineVitals.bloodPressure && (
+                        <p className='font-semibold'>ضغط الدم: {clientData.baselineVitals.bloodPressure}</p>
                       )}
-                      {patientData.baselineVitals.bloodSugar && (
-                        <p className='font-semibold'>السكر: {patientData.baselineVitals.bloodSugar}</p>
+                      {clientData.baselineVitals.bloodSugar && (
+                        <p className='font-semibold'>السكر: {clientData.baselineVitals.bloodSugar}</p>
                       )}
-                      {patientData.baselineVitals.weight && (
-                        <p className='font-semibold'>الوزن: {patientData.baselineVitals.weight} كجم</p>
+                      {clientData.baselineVitals.weight && (
+                        <p className='font-semibold'>الوزن: {clientData.baselineVitals.weight} كجم</p>
                       )}
-                      {patientData.baselineVitals.height && (
-                        <p className='font-semibold'>الطول: {patientData.baselineVitals.height} سم</p>
+                      {clientData.baselineVitals.height && (
+                        <p className='font-semibold'>الطول: {clientData.baselineVitals.height} سم</p>
                       )}
                     </div>
                   </div>
                 )}
-                {patientData.bmi && (
+                {clientData.bmi && (
                   <div>
                     <p className='text-sm text-gray-600'>مؤشر كتلة الجسم (BMI)</p>
-                    <p className='font-semibold'>{patientData.bmi.toFixed(1)}</p>
+                    <p className='font-semibold'>{clientData.bmi.toFixed(1)}</p>
                   </div>
                 )}
               </CardContent>
@@ -374,7 +374,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
                         <AppointmentCard
                           key={appointment._id}
                           appointment={appointment}
-                          canViewTreatmentStages={canViewPatientTreatmentStages}
+                          canViewTreatmentStages={canViewClientTreatmentStages}
                         />
                       ))}
                   </div>
@@ -629,8 +629,8 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
       </Tabs>
 
       {/* سجل الأنشطة */}
-      {canViewPatientActivities && (
-        <PatientActivities patientId={id} />
+      {canViewClientActivities && (
+        <ClientActivities clientId={id} />
       )}
 
       {/* Edit Stage Dialog */}
@@ -647,7 +647,7 @@ const PatientDetailsClient: React.FC<PatientDetailsClientProps> = ({ id }) => {
                 onSuccess={() => {
                   setOpenEditStage(false)
                   setSelectedStage(null)
-                  refetchPatientDetails()
+                  refetchClientDetails()
                 }}
                 onCancel={() => {
                   setOpenEditStage(false)
@@ -879,4 +879,5 @@ const AppointmentCard: React.FC<{
   )
 }
 
-export default PatientDetailsClient
+export default ClientDetailsClient
+

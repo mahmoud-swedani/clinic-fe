@@ -62,8 +62,8 @@ function SalesContent() {
           {Array.isArray(sales) && sales.map((sale: Sale) => (
             <tr key={sale._id} className='hover:bg-gray-50'>
               <td className='border border-gray-300 p-2'>
-                {typeof sale.patient === 'object' && sale.patient !== null
-                  ? sale.patient.fullName
+                {typeof sale.client === 'object' && sale.client !== null
+                  ? sale.client.fullName
                   : 'غير معروف'}
               </td>
               <td className='border border-gray-300 p-2'>

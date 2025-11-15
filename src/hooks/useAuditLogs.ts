@@ -63,6 +63,17 @@ export function useEntityAuditHistory(
   return useQuery({
     queryKey: queryKeys.auditLogs.entity(entityType, entityId),
     queryFn: async () => {
+      // Use specific routes for better permission handling
+      if (entityType === 'Invoice') {
+        const { data } = await axios.get<ApiResponse<AuditLog[]>>(
+          `/audit-logs/invoices/${entityId}`,
+          {
+            params: { limit },
+          }
+        )
+        return data.data
+      }
+      // Fallback to generic entity route for other types
       const { data } = await axios.get<ApiResponse<AuditLog[]>>(
         `/audit-logs/entity/${entityType}/${entityId}`,
         {
@@ -73,6 +84,14 @@ export function useEntityAuditHistory(
     },
     enabled: !!entityType && !!entityId,
     staleTime: 2 * 60 * 1000, // 2 minutes
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      // Don't retry on 403 (Forbidden) errors
+      if (error?.response?.status === 403) {
+        return false
+      }
+      return failureCount < 2
+    },
+    throwOnError: false, // Don't throw errors to prevent breaking the UI
   })
 }
 

@@ -91,7 +91,7 @@ function ServicesContent() {
                       {service.description || '-'}
                     </TableCell>
                     <TableCell>
-                      {service.price?.toLocaleString() || '0'} ر.س
+                      {service.price?.toLocaleString() || '0'} ل.س
                     </TableCell>
                     <TableCell>{service.duration || '-'}</TableCell>
                     <TableCell>

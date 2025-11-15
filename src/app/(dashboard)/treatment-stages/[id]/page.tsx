@@ -80,7 +80,7 @@ export default function TreatmentStageDetailPage() {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const appointment = stage.appointment as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const patient = stage.patient as any
+  const client = stage.client as any
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const doctor = stage.doctor as any
 
@@ -152,12 +152,12 @@ export default function TreatmentStageDetailPage() {
               </div>
             )}
 
-            {patient && (
+            {client && (
               <div>
-                <h3 className='font-semibold text-sm text-gray-600 mb-1'>المريض</h3>
+                <h3 className='font-semibold text-sm text-gray-600 mb-1'>العميل</h3>
                 <p className='text-gray-800'>
-                  {patient.fullName || patient.name || '-'}
-                  {patient.phone && <span className='text-gray-500 text-sm'> - {patient.phone}</span>}
+                  {client.fullName || client.name || '-'}
+                  {client.phone && <span className='text-gray-500 text-sm'> - {client.phone}</span>}
                 </p>
               </div>
             )}

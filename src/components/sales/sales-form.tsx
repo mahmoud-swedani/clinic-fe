@@ -3,9 +3,9 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { useProducts } from '@/hooks/useProducts'
-import { usePatients } from '@/hooks/usePatients'
+import { useClients } from '@/hooks/useClients'
 import axios from '@/lib/axios'
-import { Patient, Product, PaginatedResponse } from '@/types/api'
+import { Client, Product, PaginatedResponse } from '@/types/api'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -19,23 +19,27 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
+import { SearchableSelect } from '@/components/ui/searchable-select'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 export default function SalesForm() {
   const router = useRouter()
+  const queryClient = useQueryClient()
   const {
     data: productsResponse,
     isLoading: productsLoading,
     error: productsError,
   } = useProducts()
-  const { data: patientsResponse } = usePatients()
+  const { data: clientsResponse } = useClients()
   
   // Extract arrays from paginated responses
   const typedProductsResponse = productsResponse as PaginatedResponse<Product> | undefined
-  const typedPatientsResponse = patientsResponse as PaginatedResponse<Patient> | undefined
+  const typedClientsResponse = clientsResponse as PaginatedResponse<Client> | undefined
   const products = typedProductsResponse?.data || []
-  const patients = typedPatientsResponse?.data || []
+  const clients = typedClientsResponse?.data || []
 
-  const [patient, setPatient] = useState('')
+  const [client, setClient] = useState('')
   const [items, setItems] = useState<
     Array<{ product: string; quantity: number; unitPrice: number }>
   >([{ product: '', quantity: 1, unitPrice: 0 }])
@@ -44,7 +48,7 @@ export default function SalesForm() {
   const [notes, setNotes] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [salePayload, setSalePayload] = useState<{
-    patient: string
+    client: string
     items: Array<{ product: string; quantity: number; unitPrice: number }>
     totalAmount: number
     paidAmount: number
@@ -82,8 +86,8 @@ export default function SalesForm() {
     e.preventDefault()
     
     // Validation
-    if (!patient) {
-      toast.error('يرجى اختيار المريض')
+    if (!client) {
+      toast.error('يرجى اختيار العميل')
       return
     }
     
@@ -139,7 +143,7 @@ export default function SalesForm() {
 
     // Prepare payload for confirmation
     const payload = {
-      patient: patient.trim(),
+      client: client.trim(),
       items: validItems,
       totalAmount: recalculatedTotal,
       paidAmount: Number(paidAmount) || 0,
@@ -162,6 +166,11 @@ export default function SalesForm() {
       
       await axios.post('/sales', salePayload)
       toast.success('تم حفظ عملية البيع بنجاح')
+      
+      // Invalidate and refetch all sales queries to show the new sale immediately
+      queryClient.invalidateQueries({ queryKey: queryKeys.sales.all })
+      queryClient.refetchQueries({ queryKey: queryKeys.sales.all })
+      
       setConfirmOpen(false)
       router.push('/sales')
     } catch (error: unknown) {
@@ -193,22 +202,53 @@ export default function SalesForm() {
     }
   }
 
+  // Prepare client options for SearchableSelect
+  const clientOptions = Array.isArray(clients)
+    ? clients.map((p: Client) => {
+        // Format: "name - refNumber" or just "name" if no refNumber
+        const displayLabel = p.refNumber
+          ? `${p.fullName} - ${p.refNumber}`
+          : p.fullName
+        
+        // Include phone and refNumber in searchable text
+        const searchText = [
+          p.fullName,
+          p.refNumber,
+          p.phone,
+        ]
+          .filter(Boolean)
+          .join(' ')
+        
+        return {
+          value: p._id,
+          label: displayLabel,
+          searchText: searchText,
+        }
+      })
+    : []
+
+  // Prepare product options for SearchableSelect
+  const productOptions = Array.isArray(products)
+    ? products.map((product: Product) => ({
+        value: product._id,
+        label: `${product.name} - ${product.sellingPrice} ل.س`,
+      }))
+    : []
+
   return (
     <form onSubmit={handleSubmit} className='space-y-6 p-4'>
       <div>
-        <Label>المريض</Label>
-        <select
-          className='w-full border p-2 rounded'
-          value={patient}
-          onChange={(e) => setPatient(e.target.value)}
-        >
-          <option>اختر مريض</option>
-          {Array.isArray(patients) && patients.map((p: Patient) => (
-            <option key={p._id} value={p._id}>
-              {p.fullName}
-            </option>
-          ))}
-        </select>
+        <Label>العميل</Label>
+        <SearchableSelect
+          value={client}
+          onValueChange={setClient}
+          options={clientOptions}
+          placeholder='اختر عميل'
+          searchPlaceholder='ابحث عن عميل...'
+          emptyMessage='لا يوجد عملاء'
+          required
+          ariaLabel='اختر العميل'
+        />
       </div>
 
       <div className='space-y-4'>
@@ -217,28 +257,17 @@ export default function SalesForm() {
           <div key={index} className='grid grid-cols-12 items-end gap-2'>
             <div className='col-span-4'>
               <Label>المنتج</Label>
-              <select
-                className='w-full border p-2 rounded'
+              <SearchableSelect
                 value={item.product}
-                onChange={(e) =>
-                  handleItemChange(index, 'product', e.target.value)
-                }
-              >
-                <option>اختر منتج</option>
-                {productsLoading ? (
-                  <option disabled>جاري التحميل...</option>
-                ) : productsError ? (
-                  <option disabled>حدث خطأ</option>
-                ) : Array.isArray(products) && products.length > 0 ? (
-                  products.map((product: Product) => (
-                    <option key={product._id} value={product._id}>
-                      {product.name} - {product.sellingPrice} ل.س
-                    </option>
-                  ))
-                ) : (
-                  <option disabled>لا يوجد منتجات</option>
-                )}
-              </select>
+                onValueChange={(value) => handleItemChange(index, 'product', value)}
+                options={productOptions}
+                placeholder={productsLoading ? 'جاري التحميل...' : productsError ? 'حدث خطأ' : 'اختر منتج'}
+                searchPlaceholder='ابحث عن منتج...'
+                emptyMessage={productsLoading ? 'جاري التحميل...' : productsError ? 'حدث خطأ' : 'لا يوجد منتجات'}
+                disabled={productsLoading}
+                required
+                ariaLabel='اختر المنتج'
+              />
             </div>
 
             <div className='col-span-2'>

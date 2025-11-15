@@ -1,4 +1,4 @@
-// src/components/patients/patient-medications.tsx
+// src/components/clients/client-medications.tsx
 'use client'
 
 import React, { useState } from 'react'
@@ -15,20 +15,20 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { Plus, Pencil, Trash2 } from 'lucide-react'
-import { usePatientMedications, useCreatePatientMedication, useUpdatePatientMedication, useDeletePatientMedication } from '@/hooks/usePatientMedications'
-import { PatientMedication } from '@/types/api'
+import { useClientMedications, useCreateClientMedication, useUpdateClientMedication, useDeleteClientMedication } from '@/hooks/useClientMedications'
+import { ClientMedication } from '@/types/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import moment from 'moment'
 
 moment.locale('ar')
 
-interface PatientMedicationsProps {
-  patientId: string
+interface ClientMedicationsProps {
+  clientId: string
 }
 
-export function PatientMedications({ patientId }: PatientMedicationsProps) {
+export function ClientMedications({ clientId }: ClientMedicationsProps) {
   const [openDialog, setOpenDialog] = useState(false)
-  const [editingMedication, setEditingMedication] = useState<PatientMedication | null>(null)
+  const [editingMedication, setEditingMedication] = useState<ClientMedication | null>(null)
   const [formData, setFormData] = useState({
     medicationName: '',
     dosage: '',
@@ -39,14 +39,14 @@ export function PatientMedications({ patientId }: PatientMedicationsProps) {
     notes: '',
   })
 
-  const { data, isLoading } = usePatientMedications(patientId)
-  const createMutation = useCreatePatientMedication()
-  const updateMutation = useUpdatePatientMedication()
-  const deleteMutation = useDeletePatientMedication()
+  const { data, isLoading } = useClientMedications(clientId)
+  const createMutation = useCreateClientMedication()
+  const updateMutation = useUpdateClientMedication()
+  const deleteMutation = useDeleteClientMedication()
 
   const medications = data?.data || []
 
-  const handleOpenDialog = (medication?: PatientMedication) => {
+  const handleOpenDialog = (medication?: ClientMedication) => {
     if (medication) {
       setEditingMedication(medication)
       setFormData({
@@ -92,7 +92,7 @@ export function PatientMedications({ patientId }: PatientMedicationsProps) {
       })
     } else {
       await createMutation.mutateAsync({
-        patientId,
+        clientId,
         medicationData,
       })
     }

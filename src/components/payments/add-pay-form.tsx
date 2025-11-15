@@ -13,10 +13,12 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 export function AddPayForm({
   invoiceId,
-  patientId,
+  clientId,
   appointmentId,
   refetchInvoices,
   onClose,
@@ -24,7 +26,7 @@ export function AddPayForm({
   remainingAmount = 0,
 }: {
   invoiceId: string
-  patientId?: string
+  clientId?: string
   appointmentId?: string
   refetchInvoices?: () => void
   onClose?: () => void
@@ -39,6 +41,7 @@ export function AddPayForm({
   const [amount, setAmount] = useState('')
   const [method, setMethod] = useState('نقدًا')
   const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -54,13 +57,26 @@ export function AddPayForm({
     try {
       await axios.post('/payments', {
         invoiceId,
-        patient: patientId,
+        client: clientId,
         appointment: appointmentId,
         amount: numericAmount,
         method,
       })
 
       toast.success('تمت إضافة الدفعة بنجاح')
+
+      // Invalidate and refetch all relevant caches
+      queryClient.invalidateQueries({ queryKey: ['invoices'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(invoiceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.byInvoice(invoiceId) })
+      queryClient.invalidateQueries({ queryKey: queryKeys.payments.lists() })
+      queryClient.invalidateQueries({ queryKey: queryKeys.auditLogs.entity('Invoice', invoiceId) })
+      
+      // Explicitly refetch to ensure immediate updates
+      queryClient.refetchQueries({ queryKey: ['invoices'], type: 'all' })
+      queryClient.refetchQueries({ queryKey: queryKeys.invoices.detail(invoiceId) })
+      queryClient.refetchQueries({ queryKey: queryKeys.payments.byInvoice(invoiceId) })
+      queryClient.refetchQueries({ queryKey: queryKeys.auditLogs.entity('Invoice', invoiceId) })
 
       setAmount('')
       setMethod('نقدًا')
@@ -94,7 +110,7 @@ export function AddPayForm({
                     : '-'}{' '}
                   - {pay.method}
                 </span>
-                <span>{pay.amount} ريال</span>
+                <span>{pay.amount} ل.س</span>
               </li>
             ))}
           </ul>
@@ -104,7 +120,7 @@ export function AddPayForm({
       {/* نموذج الدفع */}
       <form onSubmit={handleSubmit} className='space-y-4'>
         <div className='space-y-1'>
-          <Label>المبلغ (المتبقي: {remainingAmount} ريال)</Label>
+          <Label>المبلغ (المتبقي: {remainingAmount} ل.س)</Label>
           <Input
             type='number'
             placeholder='أدخل المبلغ'

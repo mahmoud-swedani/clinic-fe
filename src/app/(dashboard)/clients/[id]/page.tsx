@@ -1,5 +1,5 @@
 import { Metadata } from 'next'
-import PatientDetailsClient from './PatientDetailsClient'
+import ClientDetailsClient from './ClientDetailsClient'
 
 export async function generateMetadata({
   params,
@@ -10,12 +10,12 @@ export async function generateMetadata({
   const awaitedParams = await params
 
   return {
-    title: `تفاصيل المريض ${awaitedParams.id}`,
+    title: `تفاصيل العميل ${awaitedParams.id}`,
   }
 }
 
 // اجعل الصفحة async لكي تنتظر params
-export default async function PatientPage({
+export default async function ClientPage({
   params,
 }: {
   params: Promise<{ id: string }>
@@ -25,8 +25,8 @@ export default async function PatientPage({
 
   return (
     <main className='p-6 max-w-5xl mx-auto bg-white rounded-lg shadow-lg'>
-      <h1 className='text-3xl font-bold mb-6 text-gray-900'>تفاصيل المريض</h1>
-      <PatientDetailsClient id={awaitedParams.id} />
+      <h1 className='text-3xl font-bold mb-6 text-gray-900'>تفاصيل العميل</h1>
+      <ClientDetailsClient id={awaitedParams.id} />
     </main>
   )
 }

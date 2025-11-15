@@ -34,11 +34,11 @@ function InvoicesContent() {
   const invoices = typedData?.data || []
 
   const filteredInvoices = invoices.filter((invoice: Invoice) => {
-    const patientName =
-      typeof invoice.patient === 'object' && invoice.patient !== null
-        ? invoice.patient.fullName || ''
+    const clientName =
+      typeof invoice.client === 'object' && invoice.client !== null
+        ? invoice.client.fullName || ''
         : ''
-    return patientName.toLowerCase().includes(searchTerm.toLowerCase())
+    return clientName.toLowerCase().includes(searchTerm.toLowerCase())
   })
   const paginationMeta = typedData?.pagination
     ? {
@@ -64,10 +64,11 @@ function InvoicesContent() {
       </div>
 
       <Input
-        placeholder='ابحث باسم المريض...'
+        placeholder='ابحث باسم العميل...'
         value={searchTerm}
         onChange={(e) => setSearchTerm(e.target.value)}
         className='max-w-sm'
+        suppressHydrationWarning
       />
 
       <Card>
@@ -89,7 +90,7 @@ function InvoicesContent() {
                 <thead>
                   <tr className='border-b bg-gray-100'>
                     <th className='px-4 py-3 font-semibold'>رقم الفاتورة</th>
-                    <th className='px-4 py-3 font-semibold'>المريض</th>
+                    <th className='px-4 py-3 font-semibold'>العميل</th>
                     <th className='px-4 py-3 font-semibold'>الإجمالي</th>
                     <th className='px-4 py-3 font-semibold'>المدفوع</th>
                     <th className='px-4 py-3 font-semibold'>المتبقي</th>
@@ -100,9 +101,9 @@ function InvoicesContent() {
                 </thead>
                 <tbody>
                   {filteredInvoices.map((invoice: Invoice, index: number) => {
-                    const patientName =
-                      typeof invoice.patient === 'object' && invoice.patient !== null
-                        ? invoice.patient.fullName
+                    const clientName =
+                      typeof invoice.client === 'object' && invoice.client !== null
+                        ? invoice.client.fullName
                         : 'غير معروف'
                     const isFullyPaid = invoice.status === 'مدفوعة بالكامل'
 
@@ -112,9 +113,14 @@ function InvoicesContent() {
                         className='border-b hover:bg-gray-50 transition-colors'
                       >
                         <td className='px-4 py-3 font-medium'>
-                          IVN-{String(index + 1).padStart(4, '0')}
+                          <Link
+                            href={`/invoices/${invoice._id}`}
+                            className='text-blue-600 hover:text-blue-800 hover:underline'
+                          >
+                            IVN-{String(index + 1).padStart(4, '0')}
+                          </Link>
                         </td>
-                        <td className='px-4 py-3'>{patientName}</td>
+                        <td className='px-4 py-3'>{clientName}</td>
                         <td className='px-4 py-3'>
                           {invoice.totalAmount?.toLocaleString() || '0'} ل.س
                         </td>
@@ -176,11 +182,11 @@ function InvoicesContent() {
                                 </DialogHeader>
                                 <AddPayForm
                                   invoiceId={invoice._id}
-                                  patientId={
-                                    typeof invoice.patient === 'object' &&
-                                    invoice.patient !== null
-                                      ? invoice.patient._id
-                                      : invoice.patient
+                                  clientId={
+                                    typeof invoice.client === 'object' &&
+                                    invoice.client !== null
+                                      ? invoice.client._id
+                                      : invoice.client
                                   }
                                   appointmentId={
                                     typeof invoice.appointment === 'object' &&

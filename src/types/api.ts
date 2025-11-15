@@ -28,6 +28,8 @@ export interface User {
   roleDetails?: Role | null
   permissions?: string[]
   branch: string | Branch
+  departments?: string[] | Department[]
+  hasAllDepartments?: boolean
   isActive: boolean
   createdBy?: string | User
   updatedBy?: string | User
@@ -37,7 +39,7 @@ export interface User {
   updatedAt?: string
 }
 
-// Patient types
+// Client types
 export interface Address {
   city?: string
   region?: string
@@ -64,7 +66,7 @@ export interface BaselineVitals {
   height?: number
 }
 
-export interface Patient {
+export interface Client {
   _id: string
   id?: string
   refNumber?: string
@@ -96,17 +98,17 @@ export interface Patient {
   baselineVitals?: BaselineVitals
   appointmentAdherence?: string
   improvementNotes?: string
-  patientClassification?: 'regular' | 'new' | 'chronic' | 'VIP'
+  clientClassification?: 'regular' | 'new' | 'chronic' | 'VIP'
   // Keep old fields for backward compatibility
   medicalHistory?: string
   createdAt?: string
   updatedAt?: string
 }
 
-export interface PatientMedication {
+export interface ClientMedication {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   medicationName: string
   dosage?: string
   frequency?: string
@@ -118,10 +120,10 @@ export interface PatientMedication {
   updatedAt?: string
 }
 
-export interface PatientImmunization {
+export interface ClientImmunization {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   vaccineName: string
   date: string
   batchNumber?: string
@@ -131,10 +133,10 @@ export interface PatientImmunization {
   updatedAt?: string
 }
 
-export interface PatientTestResult {
+export interface ClientTestResult {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   testName: string
   testDate: string
   results: string
@@ -145,8 +147,8 @@ export interface PatientTestResult {
   updatedAt?: string
 }
 
-export interface PatientWithAppointments {
-  patient: Patient
+export interface ClientWithAppointments {
+  client: Client
   appointments: Appointment[]
 }
 
@@ -154,7 +156,7 @@ export interface PatientWithAppointments {
 export interface Appointment {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   doctor: string | User
   date: string
   type: string
@@ -209,7 +211,7 @@ export interface Service {
 export interface Invoice {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   appointment: string | Appointment
   treatmentStages: string[] | TreatmentStage[]
   totalAmount: number
@@ -225,11 +227,11 @@ export interface Invoice {
 export interface Payment {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   appointment?: string | Appointment
   invoice: string | Invoice
   amount: number
-  method: 'نقدًا' | 'بطاقة'
+  method: 'نقدًا' | 'بطاقة' | 'تحويل بنكي' | 'أخرى'
   date: string
   receivedBy: string | User
   createdAt?: string
@@ -240,7 +242,7 @@ export interface Payment {
 export interface TreatmentStage {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   title: string
   description?: string
   date: string
@@ -277,7 +279,7 @@ export interface SaleItem {
 export interface Sale {
   _id: string
   id?: string
-  patient: string | Patient
+  client: string | Client
   items: SaleItem[]
   totalAmount: number
   paidAmount: number
@@ -324,7 +326,7 @@ export interface FinancialRecord {
 
 // Dashboard types
 export interface DashboardStats {
-  totalPatients: number
+  totalClients: number
   totalAppointments: number
   totalUsers: number
   totalBranches: number
@@ -372,7 +374,7 @@ export interface TimeSeriesDataPoint {
 }
 
 // Request payload types
-export interface CreatePatientRequest {
+export interface CreateClientRequest {
   refNumber?: string
   firstName: string
   fatherName: string
@@ -402,12 +404,12 @@ export interface CreatePatientRequest {
   baselineVitals?: BaselineVitals
   appointmentAdherence?: string
   improvementNotes?: string
-  patientClassification?: 'regular' | 'new' | 'chronic' | 'VIP'
+  clientClassification?: 'regular' | 'new' | 'chronic' | 'VIP'
   medicalHistory?: string
 }
 
 export interface CreateAppointmentRequest {
-  patient: string
+  client: string
   doctor: string
   date: string
   type: string
@@ -419,8 +421,8 @@ export interface CreateAppointmentRequest {
 export interface CreatePaymentRequest {
   invoiceId: string
   amount: number
-  method: 'نقدًا' | 'بطاقة'
-  patient: string
+  method: 'نقدًا' | 'بطاقة' | 'تحويل بنكي' | 'أخرى'
+  client: string
   appointment?: string
 }
 
@@ -437,6 +439,7 @@ export interface LoginResponse {
     email: string
     role: string
     branch: string
+    permissions?: string[]
   }
 }
 
@@ -481,7 +484,7 @@ export interface RolePermission {
 export interface AuditLog {
   _id: string
   id?: string
-  entityType: 'User' | 'Role' | 'Permission' | 'RolePermission' | 'Appointment'
+  entityType: 'User' | 'Role' | 'Permission' | 'RolePermission' | 'Appointment' | 'Client' | 'TreatmentStage' | 'Invoice'
   entityId: string
   action:
     | 'create'

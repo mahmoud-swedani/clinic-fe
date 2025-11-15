@@ -1,7 +1,7 @@
 'use client'
 
 import { Suspense } from 'react'
-import { usePatients } from '@/hooks/usePatients'
+import { useClients } from '@/hooks/useClients'
 import { usePagination } from '@/hooks/usePagination'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
@@ -12,7 +12,7 @@ import { Input } from '@/components/ui/input'
 import { Pagination } from '@/components/ui/Pagination'
 import { format } from 'date-fns'
 import { useUserPermissions } from '@/hooks/usePermissions'
-import { Patient, PaginatedResponse } from '@/types/api'
+import { Client, PaginatedResponse } from '@/types/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Pencil } from 'lucide-react'
 import {
@@ -24,20 +24,20 @@ import {
   TableRow,
 } from '@/components/ui/table'
 
-function PatientsContent() {
+function ClientsContent() {
   const router = useRouter()
   const [search, setSearch] = useState('')
   const { page, limit, goToPage, changeLimit } = usePagination(10)
-  const { data, isLoading } = usePatients(page, limit)
-  const { canManagePatients, hasPermission } = useUserPermissions()
+  const { data, isLoading } = useClients(page, limit)
+  const { canManageClients, hasPermission } = useUserPermissions()
 
-  const typedData = data as PaginatedResponse<Patient> | undefined
+  const typedData = data as PaginatedResponse<Client> | undefined
   // فلترة البيانات حسب الاسم أو الجوال مع تجاهل حالة الأحرف
-  const patients = typedData?.data || []
-  const filteredPatients = patients.filter(
-    (patient) =>
-      patient.fullName.toLowerCase().includes(search.toLowerCase()) ||
-      patient.phone.includes(search)
+  const clients = typedData?.data || []
+  const filteredClients = clients.filter(
+    (client) =>
+      client.fullName.toLowerCase().includes(search.toLowerCase()) ||
+      client.phone.includes(search)
   )
   const paginationMeta = typedData?.pagination
     ? {
@@ -57,16 +57,16 @@ function PatientsContent() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className='max-w-md w-full'
-          aria-label='بحث عن مريض'
+          aria-label='بحث عن عميل'
           type='search'
         />
 
         <Button 
           className='whitespace-nowrap px-6 py-2 text-lg font-semibold' 
-          aria-label='إضافة مريض جديد'
-          onClick={() => router.push('/patients/new')}
+          aria-label='إضافة عميل جديد'
+          onClick={() => router.push('/clients/new')}
         >
-          ➕ إضافة مريض {canManagePatients ? '(✓)' : '(✗)'}
+          ➕ إضافة عميل {canManageClients ? '(✓)' : '(✗)'}
         </Button>
       </div>
 
@@ -78,7 +78,7 @@ function PatientsContent() {
       ) : (
         <Card>
           <CardContent className='p-0'>
-            {filteredPatients.length === 0 ? (
+            {filteredClients.length === 0 ? (
               <p className='text-center text-gray-500 text-lg py-12'>
                 لا توجد نتائج مطابقة.
               </p>
@@ -96,7 +96,7 @@ function PatientsContent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredPatients.map((patient: Patient) => {
+                  {filteredClients.map((client: Client) => {
                     const classificationLabels: { [key: string]: string } = {
                       new: 'جديد',
                       regular: 'عادي',
@@ -106,39 +106,39 @@ function PatientsContent() {
 
                     return (
                       <TableRow
-                        key={patient._id}
+                        key={client._id}
                         className='hover:bg-gray-50 transition-colors'
                       >
                         <TableCell className='font-mono text-sm'>
-                          {patient.refNumber || '-'}
+                          {client.refNumber || '-'}
                         </TableCell>
                         <TableCell>
                           <Link
-                            href={`/patients/${patient._id}`}
+                            href={`/clients/${client._id}`}
                             className='text-blue-600 hover:underline font-medium'
                           >
-                            {patient.fullName}
+                            {client.fullName}
                           </Link>
                         </TableCell>
                         <TableCell>
                           <a
-                            href={`tel:${patient.phone}`}
+                            href={`tel:${client.phone}`}
                             className='text-indigo-600 hover:underline'
                           >
-                            {patient.phone}
+                            {client.phone}
                           </a>
                         </TableCell>
                         <TableCell>
-                          {patient.gender === 'male' ? 'ذكر' : 'أنثى'}
+                          {client.gender === 'male' ? 'ذكر' : 'أنثى'}
                         </TableCell>
                         <TableCell>
-                          {patient.dateOfBirth
-                            ? format(new Date(patient.dateOfBirth), 'yyyy-MM-dd')
+                          {client.dateOfBirth
+                            ? format(new Date(client.dateOfBirth), 'yyyy-MM-dd')
                             : '-'}
                         </TableCell>
                         <TableCell>
-                          {patient.patientClassification
-                            ? classificationLabels[patient.patientClassification] || patient.patientClassification
+                          {client.clientClassification
+                            ? classificationLabels[client.clientClassification] || client.clientClassification
                             : '-'}
                         </TableCell>
                         <TableCell>
@@ -148,18 +148,18 @@ function PatientsContent() {
                               variant='outline'
                               size='sm'
                             >
-                              <Link href={`/patients/${patient._id}`}>
+                              <Link href={`/clients/${client._id}`}>
                                 عرض التفاصيل
                               </Link>
                             </Button>
-                            {hasPermission('patients.edit') && (
+                            {hasPermission('clients.edit') && (
                               <Button
                                 asChild
                                 variant='outline'
                                 size='sm'
                                 className='gap-1'
                               >
-                                <Link href={`/patients/${patient._id}/edit`}>
+                                <Link href={`/clients/${client._id}/edit`}>
                                   <Pencil className='w-4 h-4' />
                                   تعديل
                                 </Link>
@@ -189,7 +189,7 @@ function PatientsContent() {
   )
 }
 
-export default function PatientsPage() {
+export default function ClientsPage() {
   return (
     <Suspense
       fallback={
@@ -203,7 +203,7 @@ export default function PatientsPage() {
         </main>
       }
     >
-      <PatientsContent />
+      <ClientsContent />
     </Suspense>
   )
 }

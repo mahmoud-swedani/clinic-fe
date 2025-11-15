@@ -5,15 +5,17 @@ import { Input } from '@/components/ui/input'
 import { useState } from 'react'
 import axios from '@/lib/axios'
 import { toast } from 'sonner'
+import { useQueryClient } from '@tanstack/react-query'
+import { queryKeys } from '@/lib/queryKeys'
 
 export function TreatmentStageForm({
   appointmentId,
-  patientId,
+  clientId,
   doctorId,
   onSuccess,
 }: {
   appointmentId: string
-  patientId: string
+  clientId: string
   doctorId: string
   onSuccess?: () => void
 }) {
@@ -26,16 +28,17 @@ export function TreatmentStageForm({
   const [date, setDate] = useState('')
   const [cost, setCost] = useState('')
   const [loading, setLoading] = useState(false)
+  const queryClient = useQueryClient()
 
   const handleSubmit = async () => {
 
-    if (!patientId || !doctorId || !appointmentId) {
+    if (!clientId || !doctorId || !appointmentId) {
       console.error('[TreatmentStageForm] Missing required fields:', {
         appointmentId: appointmentId || 'MISSING',
-        patientId: patientId || 'MISSING',
+        clientId: clientId || 'MISSING',
         doctorId: doctorId || 'MISSING',
       })
-      toast.error('بيانات المريض أو الطبيب أو الموعد غير مكتملة')
+      toast.error('بيانات العميل أو الطبيب أو الموعد غير مكتملة')
       return
     }
 
@@ -60,7 +63,7 @@ export function TreatmentStageForm({
     setLoading(true)
     try {
       const payload: Record<string, unknown> = {
-        patient: patientId,
+        client: clientId,
         title: title.trim(),
         description: description.trim(),
         date: dateObj.toISOString(),
@@ -74,7 +77,28 @@ export function TreatmentStageForm({
         payload.cost = Number(cost)
       }
 
-      await axios.post('/treatment-stages', payload)
+      const response = await axios.post('/treatment-stages', payload)
+
+      // Invalidate invoices cache since creating a treatment stage may create/update an invoice
+      // Use prefix matching to invalidate all invoice queries
+      queryClient.invalidateQueries({ queryKey: ['invoices'] })
+      queryClient.invalidateQueries({ queryKey: queryKeys.invoices.all })
+      
+      // Explicitly refetch all invoice list queries
+      queryClient.refetchQueries({ queryKey: ['invoices'], type: 'all' })
+      queryClient.refetchQueries({ queryKey: queryKeys.invoices.all, type: 'all' })
+      
+      // If the response includes an invoice, also invalidate and refetch that specific invoice
+      if (response.data?.data?.invoice?._id) {
+        const invoiceId = response.data.data.invoice._id
+        queryClient.invalidateQueries({ queryKey: queryKeys.invoices.detail(invoiceId) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.payments.byInvoice(invoiceId) })
+        queryClient.invalidateQueries({ queryKey: queryKeys.auditLogs.entity('Invoice', invoiceId) })
+        // Explicitly refetch to ensure immediate updates
+        queryClient.refetchQueries({ queryKey: queryKeys.invoices.detail(invoiceId) })
+        queryClient.refetchQueries({ queryKey: queryKeys.payments.byInvoice(invoiceId) })
+        queryClient.refetchQueries({ queryKey: queryKeys.auditLogs.entity('Invoice', invoiceId) })
+      }
 
       // Reset form
       setTitle('')

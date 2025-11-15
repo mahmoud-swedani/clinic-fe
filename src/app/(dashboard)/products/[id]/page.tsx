@@ -85,11 +85,11 @@ export default function ProductDetailsPage() {
             <strong>الوحدة:</strong> {product.unit}
           </div>
           <div>
-            <strong>سعر الشراء:</strong> {product.purchasePrice} ر.س
+            <strong>سعر الشراء:</strong> {product.purchasePrice} ل.س
           </div>
           <div>
             <strong>سعر البيع:</strong>{' '}
-            {product.sellingPrice ? `${product.sellingPrice} ر.س` : '—'}
+            {product.sellingPrice ? `${product.sellingPrice} ل.س` : '—'}
           </div>
           <div>
             <strong>المخزون:</strong> {product.stock} {product.unit}

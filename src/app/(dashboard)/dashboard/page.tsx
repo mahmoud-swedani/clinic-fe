@@ -126,7 +126,7 @@ const DashboardPage = () => {
 
   // Define all stats with their keys for filtering
   const allStats = [
-    { key: 'totalPatients', title: 'المرضى', value: data?.stats?.totalPatients },
+    { key: 'totalClients', title: 'العملاء', value: data?.stats?.totalClients },
     { key: 'totalAppointments', title: 'المواعيد', value: data?.stats?.totalAppointments },
     { key: 'totalUsers', title: 'المستخدمين', value: data?.stats?.totalUsers },
     { key: 'totalBranches', title: 'الفروع', value: data?.stats?.totalBranches },

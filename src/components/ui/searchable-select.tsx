@@ -60,11 +60,25 @@ export function SearchableSelect({
     })
   }, [options, searchQuery])
 
-  // Get selected option label
-  const selectedLabel = React.useMemo(() => {
-    const selected = options.find((opt) => opt.value === value)
-    return selected?.label || ''
-  }, [options, value])
+  // Ensure selected item is always in rendered options (for Radix to find text)
+  const optionsToRender = React.useMemo(() => {
+    if (!value || (typeof value === 'string' && value.trim() === '')) {
+      return filteredOptions
+    }
+    
+    const valueStr = String(value).trim()
+    const selectedOption = options.find(opt => {
+      if (!opt.value) return false
+      return String(opt.value).trim() === valueStr
+    })
+    
+    // If selected option exists and is not in filteredOptions, add it
+    if (selectedOption && !filteredOptions.some(opt => String(opt.value).trim() === valueStr)) {
+      return [selectedOption, ...filteredOptions]
+    }
+    
+    return filteredOptions
+  }, [filteredOptions, options, value])
 
   // Reset search when dialog closes
   React.useEffect(() => {
@@ -78,10 +92,26 @@ export function SearchableSelect({
     }
   }, [open])
 
+  // Use undefined for empty value (Radix Select requirement)
+  const selectValue = value && String(value).trim() !== '' ? String(value).trim() : undefined
+
+  // Handle value change - ensure we always pass a string (not undefined)
+  const handleValueChange = (newValue: string | undefined) => {
+    // Convert undefined/empty to empty string, otherwise use the value as string
+    const stringValue = newValue && String(newValue).trim() !== '' ? String(newValue).trim() : ''
+    
+    // Debug logging in development
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[SearchableSelect] Value changed:', { newValue, stringValue, optionsCount: options.length })
+    }
+    
+    onValueChange(stringValue)
+  }
+
   return (
     <Select
-      value={value}
-      onValueChange={onValueChange}
+      value={selectValue}
+      onValueChange={handleValueChange}
       required={required}
       disabled={disabled}
       open={open}
@@ -91,9 +121,7 @@ export function SearchableSelect({
         aria-label={ariaLabel}
         className={cn('w-full', className)}
       >
-        <SelectValue placeholder={placeholder}>
-          {value && selectedLabel ? selectedLabel : placeholder}
-        </SelectValue>
+        <SelectValue placeholder={placeholder} />
       </SelectTrigger>
       <SelectContent className='p-0 max-h-[400px]' dir='rtl'>
         {/* Search Input */}
@@ -123,12 +151,12 @@ export function SearchableSelect({
 
         {/* Options List with Scroll */}
         <div className='max-h-[300px] overflow-y-auto p-1'>
-          {filteredOptions.length === 0 ? (
+          {optionsToRender.length === 0 ? (
             <div className='py-6 text-center text-sm text-muted-foreground'>
               {emptyMessage}
             </div>
           ) : (
-            filteredOptions.map((option) => (
+            optionsToRender.map((option) => (
               <SelectItem
                 key={option.value}
                 value={option.value}

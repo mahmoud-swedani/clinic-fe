@@ -47,7 +47,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { usePagination } from '@/hooks/usePagination'
 import { Pagination } from '@/components/ui/Pagination'
-import { Patient, User, Appointment, PaginatedResponse } from '@/types/api'
+import { Client, User, Appointment, PaginatedResponse } from '@/types/api'
 import { toast } from 'sonner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useQueryClient } from '@tanstack/react-query'
@@ -95,7 +95,7 @@ function AppointmentsContent() {
   const branchId = user?.branch 
     ? (typeof user.branch === 'string' ? user.branch : user.branch._id)
     : undefined
-  const { patients, doctors, services, departments } = useAllFormData(branchId)
+  const { clients, services, departments } = useAllFormData(branchId)
 
   const [openAddStage, setOpenAddStage] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
@@ -141,12 +141,12 @@ function AppointmentsContent() {
     const lowerSearch = search.trim().toLowerCase()
 
     return appointmentsList.filter((appt: Appointment) => {
-      const patient = typeof appt.patient === 'object' ? appt.patient : null
+      const client = typeof appt.client === 'object' ? appt.client : null
       const doctor = typeof appt.doctor === 'object' ? appt.doctor : null
-      const patientName = (patient?.fullName || '').toLowerCase()
+      const clientName = (client?.fullName || '').toLowerCase()
       const doctorName = (doctor?.name || '').toLowerCase()
       
-      const matchesSearch = lowerSearch === '' || patientName.includes(lowerSearch) || doctorName.includes(lowerSearch)
+      const matchesSearch = lowerSearch === '' || clientName.includes(lowerSearch) || doctorName.includes(lowerSearch)
       const matchesDate = date && appt.date
         ? new Date(appt.date).toISOString().slice(0, 10) === date
         : !date
@@ -170,8 +170,8 @@ function AppointmentsContent() {
     setCalendarView(newView as CalendarView)
   }, [])
 
-  // Helper function to extract ID from patient/doctor (string or object)
-  const extractId = (value: string | Patient | User | null | undefined): string => {
+  // Helper function to extract ID from client/doctor (string or object)
+  const extractId = (value: string | Client | User | null | undefined): string => {
     if (!value) return ''
     if (typeof value === 'string') return value
     if (typeof value === 'object' && value !== null) {
@@ -183,23 +183,23 @@ function AppointmentsContent() {
 
   const openStageDialog = (appt: Appointment) => {
     console.log('[openStageDialog] Appointment object:', appt)
-    console.log('[openStageDialog] Patient:', appt.patient, 'Type:', typeof appt.patient)
+    console.log('[openStageDialog] Client:', appt.client, 'Type:', typeof appt.client)
     console.log('[openStageDialog] Doctor:', appt.doctor, 'Type:', typeof appt.doctor)
     
     // Extract IDs for debugging
-    const patientId = extractId(appt.patient)
+    const clientId = extractId(appt.client)
     const doctorId = extractId(appt.doctor)
     
-    console.log('[openStageDialog] Extracted IDs:', { patientId, doctorId, appointmentId: appt._id })
+    console.log('[openStageDialog] Extracted IDs:', { clientId, doctorId, appointmentId: appt._id })
     
-    if (!patientId || !doctorId || !appt._id) {
+    if (!clientId || !doctorId || !appt._id) {
       console.error('[openStageDialog] Missing IDs in appointment:', {
-        hasPatientId: !!patientId,
+        hasClientId: !!clientId,
         hasDoctorId: !!doctorId,
         hasAppointmentId: !!appt._id,
         appointment: appt,
       })
-      toast.error('بيانات الموعد غير مكتملة - يرجى التأكد من وجود المريض والطبيب')
+      toast.error('بيانات الموعد غير مكتملة - يرجى التأكد من وجود العميل والطبيب')
       return
     }
     
@@ -262,8 +262,7 @@ function AppointmentsContent() {
                 </DialogDescription>
               </DialogHeader>
               <AppointmentForm
-                patients={patients}
-                doctors={doctors}
+                clients={clients}
                 services={services}
                 departments={departments}
                 initialData={editingAppointment}
@@ -274,6 +273,10 @@ function AppointmentsContent() {
                   // Force refetch of ALL queries (not just active) to immediately update the UI for all users
                   // This ensures other users see changes immediately, not just when their query becomes active
                   queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+                  // Explicitly refetch the shared appointments cache used by doctor dashboard
+                  queryClient.refetchQueries({ queryKey: ['appointments', 'all-shared'], type: 'all' })
+                  // Invalidate doctor dashboard stats
+                  queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-stats'] })
                   refetch()
                   setOpenForm(false)
                   setEditingAppointment(null)
@@ -287,7 +290,7 @@ function AppointmentsContent() {
       {/* الفلاتر */}
       <section className='grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4'>
         <Input
-          placeholder='ابحث باسم المريض أو الطبيب'
+          placeholder='ابحث باسم العميل أو الطبيب'
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           aria-label='بحث عن موعد'
@@ -353,7 +356,7 @@ function AppointmentsContent() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className='text-right'>نوع الكشف</TableHead>
-                      <TableHead className='text-right'>المريض</TableHead>
+                      <TableHead className='text-right'>العميل</TableHead>
                       <TableHead className='text-right'>الطبيب</TableHead>
                       <TableHead className='text-right'>القسم</TableHead>
                       <TableHead className='text-right'>التاريخ والوقت</TableHead>
@@ -363,8 +366,8 @@ function AppointmentsContent() {
                   </TableHeader>
                   <TableBody>
                     {filteredAppointments.map((appt: Appointment) => {
-                      const patient = typeof appt.patient === 'object' && appt.patient !== null
-                        ? appt.patient
+                      const client = typeof appt.client === 'object' && appt.client !== null
+                        ? appt.client
                         : null
                       const doctor = typeof appt.doctor === 'object' && appt.doctor !== null
                         ? appt.doctor
@@ -387,13 +390,13 @@ function AppointmentsContent() {
                         >
                           <TableCell className='font-medium'>{appt.type || '-'}</TableCell>
                           <TableCell>
-                            {patient ? (
+                            {client ? (
                               <Link
-                                href={`/patients/${patient._id || patient}`}
+                                href={`/clients/${client._id || client}`}
                                 className='text-blue-600 hover:underline font-medium'
                                 onClick={(e) => e.stopPropagation()}
                               >
-                                {patient.fullName || '-'}
+                                {client.fullName || '-'}
                               </Link>
                             ) : (
                               '-'
@@ -481,7 +484,7 @@ function AppointmentsContent() {
                                       </DialogHeader>
                                       <TreatmentStageForm
                                         appointmentId={selectedAppointment._id}
-                                        patientId={extractId(selectedAppointment.patient)}
+                                        clientId={extractId(selectedAppointment.client)}
                                         doctorId={extractId(selectedAppointment.doctor)}
                                         onSuccess={() => {
                                           setOpenAddStage(false)
@@ -523,10 +526,10 @@ function AppointmentsContent() {
             events={filteredAppointments
               .filter((appt: Appointment) => appt.date)
               .map((appt: Appointment) => {
-                const patient = typeof appt.patient === 'object' ? appt.patient : null
+                const client = typeof appt.client === 'object' ? appt.client : null
                 return {
                   id: appt._id,
-                  title: `${patient?.fullName || 'مريض'} - ${appt.type}`,
+                  title: `${client?.fullName || 'عميل'} - ${appt.type}`,
                   start: new Date(appt.date!),
                   end: new Date(appt.date!),
                   allDay: false,

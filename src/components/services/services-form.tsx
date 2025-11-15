@@ -129,7 +129,7 @@ export default function ServicesForm({
       </div>
 
       <div>
-        <label className='block mb-1 font-medium'>السعر (ر.س)</label>
+        <label className='block mb-1 font-medium'>السعر (ل.س)</label>
         <Input
           type='number'
           value={price}

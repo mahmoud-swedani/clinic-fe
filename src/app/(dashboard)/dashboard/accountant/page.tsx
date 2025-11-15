@@ -193,8 +193,8 @@ function AccountantDashboardContent() {
                   <div className='flex justify-between items-start mb-2'>
                     <div>
                       <p className='font-semibold text-lg text-indigo-700'>
-                        {typeof invoice.patient === 'object' && invoice.patient !== null
-                          ? invoice.patient.fullName
+                        {typeof invoice.client === 'object' && invoice.client !== null
+                          ? invoice.client.fullName
                           : 'غير معروف'}
                       </p>
                       <p className='text-sm text-gray-600'>

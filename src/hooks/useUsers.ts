@@ -187,3 +187,26 @@ export function useSecretaries() {
     },
   })
 }
+
+// جلب المستخدمين في قسم معين
+export function useUsersByDepartment(departmentId: string | null) {
+  return useQuery({
+    queryKey: [...queryKeys.users.all, 'by-department', departmentId],
+    queryFn: async () => {
+      if (!departmentId) {
+        return []
+      }
+      const { data } = await axios.get<ApiResponse<User[]>>(`/users/by-department/${departmentId}`)
+      return data.data // Extract data from ApiResponse
+    },
+    enabled: !!departmentId,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnWindowFocus: false,
+    retry: (failureCount, error: { response?: { status?: number } }) => {
+      if (error?.response?.status === 429) {
+        return false
+      }
+      return failureCount < 1
+    },
+  })
+}

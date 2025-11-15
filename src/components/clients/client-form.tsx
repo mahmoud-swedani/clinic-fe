@@ -1,4 +1,4 @@
-// src/components/patients/patient-form.tsx
+// src/components/clients/client-form.tsx
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
@@ -18,15 +18,15 @@ import {
   DialogDescription,
   DialogFooter,
 } from '@/components/ui/dialog'
-import { Patient, CreatePatientRequest, Address, EmergencyContact, Lifestyle, BaselineVitals } from '@/types/api'
+import { Client, CreateClientRequest, Address, EmergencyContact, Lifestyle, BaselineVitals } from '@/types/api'
 import { X, Plus, Check, ChevronRight, ChevronLeft, Edit } from 'lucide-react'
-import { PatientMedications } from './patient-medications'
-import { PatientImmunizations } from './patient-immunizations'
-import { PatientTestResults } from './patient-test-results'
+import { ClientMedications } from './client-medications'
+import { ClientImmunizations } from './client-immunizations'
+import { ClientTestResults } from './client-test-results'
 
 type Props = {
-  initialData?: Partial<Patient>
-  onSubmit: (data: CreatePatientRequest) => void | Promise<void>
+  initialData?: Partial<Client>
+  onSubmit: (data: CreateClientRequest) => void | Promise<void>
   isLoading?: boolean
 }
 
@@ -60,7 +60,7 @@ type FormData = {
   baselineVitals: BaselineVitals
   appointmentAdherence: string
   improvementNotes: string
-  patientClassification: '' | 'regular' | 'new' | 'chronic' | 'VIP'
+  clientClassification: '' | 'regular' | 'new' | 'chronic' | 'VIP'
   medicalHistory?: string
 }
 
@@ -75,7 +75,7 @@ const STEP_LABELS = [
   'التصنيف',
 ]
 
-export function PatientForm({
+export function ClientForm({
   initialData,
   onSubmit = () => {},
   isLoading,
@@ -119,7 +119,7 @@ export function PatientForm({
     baselineVitals: { bloodPressure: '', bloodSugar: '', weight: undefined, height: undefined },
     appointmentAdherence: '',
     improvementNotes: '',
-    patientClassification: 'new',
+    clientClassification: 'new',
     medicalHistory: '',
   })
 
@@ -181,7 +181,7 @@ export function PatientForm({
         },
         appointmentAdherence: initialData.appointmentAdherence || '',
         improvementNotes: initialData.improvementNotes || '',
-        patientClassification: (initialData.patientClassification as '' | 'regular' | 'new' | 'chronic' | 'VIP') || 'new',
+        clientClassification: (initialData.clientClassification as '' | 'regular' | 'new' | 'chronic' | 'VIP') || 'new',
         medicalHistory: initialData.medicalHistory || '',
       }))
     }
@@ -300,7 +300,7 @@ export function PatientForm({
       calculatedBmi = formData.baselineVitals.weight / (heightInMeters * heightInMeters)
     }
 
-    const payload: CreatePatientRequest = {
+    const payload: CreateClientRequest = {
       refNumber: formData.refNumber || undefined,
       firstName: formData.firstName,
       fatherName: formData.fatherName,
@@ -330,7 +330,7 @@ export function PatientForm({
       baselineVitals: formData.baselineVitals,
       appointmentAdherence: formData.appointmentAdherence || undefined,
       improvementNotes: formData.improvementNotes || undefined,
-      patientClassification: formData.patientClassification ? formData.patientClassification as 'regular' | 'new' | 'chronic' | 'VIP' : undefined,
+      clientClassification: formData.clientClassification ? formData.clientClassification as 'regular' | 'new' | 'chronic' | 'VIP' : undefined,
       medicalHistory: formData.medicalHistory || undefined,
     }
 
@@ -343,11 +343,11 @@ export function PatientForm({
       // Toast is shown by the parent component, so we don't show it here
       setConfirmOpen(false)
       if (!isEditing) {
-        router.push('/patients')
+        router.push('/clients')
       }
     } catch (error) {
       // Error handling is done by parent
-      console.error('Error submitting patient form:', error)
+      console.error('Error submitting client form:', error)
     } finally {
       setIsSubmitting(false)
     }
@@ -555,10 +555,10 @@ export function PatientForm({
             </div>
             <div className='text-sm space-y-2'>
               <p className='flex justify-between'><span className='font-medium text-gray-600'>التصنيف:</span> <span className='text-gray-900'>{
-                formData.patientClassification === 'new' ? 'جديد' :
-                formData.patientClassification === 'regular' ? 'عادي' :
-                formData.patientClassification === 'chronic' ? 'مزمن' :
-                formData.patientClassification === 'VIP' ? 'VIP' : '-'
+                formData.clientClassification === 'new' ? 'جديد' :
+                formData.clientClassification === 'regular' ? 'عادي' :
+                formData.clientClassification === 'chronic' ? 'مزمن' :
+                formData.clientClassification === 'VIP' ? 'VIP' : '-'
               }</span></p>
               {formData.appointmentAdherence && <p className='flex justify-between'><span className='font-medium text-gray-600'>الالتزام:</span> <span className='text-gray-900 text-left max-w-[60%]'>{formData.appointmentAdherence}</span></p>}
               {formData.improvementNotes && <p className='flex justify-between'><span className='font-medium text-gray-600'>ملاحظات:</span> <span className='text-gray-900 text-left max-w-[60%]'>{formData.improvementNotes}</span></p>}
@@ -950,13 +950,13 @@ export function PatientForm({
       <h3 className='text-lg font-semibold mb-4'>السجلات</h3>
       {isEditing && initialData?._id ? (
         <div className='space-y-6'>
-          <PatientMedications patientId={initialData._id} />
-          <PatientImmunizations patientId={initialData._id} />
-          <PatientTestResults patientId={initialData._id} />
+          <ClientMedications clientId={initialData._id} />
+          <ClientImmunizations clientId={initialData._id} />
+          <ClientTestResults clientId={initialData._id} />
         </div>
       ) : (
         <div className='text-center text-gray-500 py-8'>
-          <p>يجب حفظ المريض أولاً لعرض السجلات</p>
+          <p>يجب حفظ العميل أولاً لعرض السجلات</p>
         </div>
       )}
     </div>
@@ -1125,13 +1125,13 @@ export function PatientForm({
       <h3 className='text-lg font-semibold mb-4'>التصنيف</h3>
       <div className='grid grid-cols-1 md:grid-cols-2 gap-4'>
         <div>
-          <Label htmlFor='patientClassification'>تصنيف المريض</Label>
+          <Label htmlFor='clientClassification'>تصنيف العميل</Label>
           <Select
-            value={formData.patientClassification}
+            value={formData.clientClassification}
             onValueChange={(value) =>
               setFormData((prev) => ({
                 ...prev,
-                patientClassification: value as 'regular' | 'new' | 'chronic' | 'VIP',
+                clientClassification: value as 'regular' | 'new' | 'chronic' | 'VIP',
               }))
             }
           >
@@ -1148,13 +1148,13 @@ export function PatientForm({
         </div>
       </div>
       <div>
-        <Label htmlFor='appointmentAdherence'>التزام المريض بالمواعيد والعلاج</Label>
+        <Label htmlFor='appointmentAdherence'>التزام العميل بالمواعيد والعلاج</Label>
         <Textarea
           id='appointmentAdherence'
           value={formData.appointmentAdherence}
           onChange={(e) => setFormData((prev) => ({ ...prev, appointmentAdherence: e.target.value }))}
           rows={3}
-          placeholder='ملاحظات حول التزام المريض بالمواعيد والعلاج'
+          placeholder='ملاحظات حول التزام العميل بالمواعيد والعلاج'
         />
       </div>
       <div>
@@ -1164,7 +1164,7 @@ export function PatientForm({
           value={formData.improvementNotes}
           onChange={(e) => setFormData((prev) => ({ ...prev, improvementNotes: e.target.value }))}
           rows={4}
-          placeholder='ملاحظات حول حالة المريض وتحسنه أو تدهوره'
+          placeholder='ملاحظات حول حالة العميل وتحسنه أو تدهوره'
         />
       </div>
     </div>
@@ -1224,7 +1224,7 @@ export function PatientForm({
                 </Button>
               ) : (
                 <Button type='button' onClick={handleSaveClick} disabled={isLoading || isSubmitting} className='min-w-[120px]'>
-                  {isSubmitting ? 'جاري الحفظ...' : isEditing ? 'تحديث بيانات المريض' : 'حفظ المريض'}
+                  {isSubmitting ? 'جاري الحفظ...' : isEditing ? 'تحديث بيانات العميل' : 'حفظ العميل'}
                 </Button>
               )}
             </div>
@@ -1251,9 +1251,9 @@ export function PatientForm({
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>تأكيد {isEditing ? 'تحديث' : 'إنشاء'} المريض</DialogTitle>
+            <DialogTitle>تأكيد {isEditing ? 'تحديث' : 'إنشاء'} العميل</DialogTitle>
             <DialogDescription>
-              هل أنت متأكد أنك تريد {isEditing ? 'تحديث' : 'إنشاء'} هذا المريض؟
+              هل أنت متأكد أنك تريد {isEditing ? 'تحديث' : 'إنشاء'} هذا العميل؟
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

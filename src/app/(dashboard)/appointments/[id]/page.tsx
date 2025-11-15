@@ -18,7 +18,7 @@ import {
 import moment from 'moment'
 import { TreatmentStageForm } from '@/components/treatment-stages/treatment-stage-form'
 import { motion } from 'framer-motion'
-import { Appointment, Patient, User, TreatmentStage, ApiResponse } from '@/types/api'
+import { Appointment, Client, User, TreatmentStage, ApiResponse } from '@/types/api'
 import { useUserPermissions } from '@/hooks/usePermissions'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Pencil } from 'lucide-react'
@@ -31,8 +31,8 @@ import { useCurrentUser } from '@/hooks/useCurrentUser'
 
 moment.locale('ar')
 
-// Helper function to extract ID from patient/doctor (string or object)
-const extractId = (value: string | Patient | User | null | undefined): string => {
+// Helper function to extract ID from client/doctor (string or object)
+const extractId = (value: string | Client | User | null | undefined): string => {
   if (!value) return ''
   if (typeof value === 'string') return value
   if (typeof value === 'object' && value !== null) {
@@ -93,7 +93,7 @@ export default function AppointmentDetailPage() {
   const treatmentStages = treatmentStagesData || []
 
   // Fetch form data using cached hooks (data is cached globally)
-  const { patients, doctors, services, departments } = useAllFormData(branchId)
+  const { clients: patients, services, departments } = useAllFormData(branchId)
 
   // Set loading and error states
   const loading = appointmentLoading
@@ -160,8 +160,7 @@ export default function AppointmentDetailPage() {
                 </DialogHeader>
                 {appointment && (
                   <AppointmentForm
-                    patients={patients}
-                    doctors={doctors}
+                    clients={patients}
                     services={services}
                     departments={departments}
                     initialData={appointment}
@@ -173,6 +172,10 @@ export default function AppointmentDetailPage() {
                       queryClient.invalidateQueries({ queryKey: queryKeys.appointments.detail(appointmentId as string) })
                       // Force refetch of ALL queries (not just active) to immediately update the UI for all users
                       queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+                      // Explicitly refetch the shared appointments cache used by doctor dashboard
+                      queryClient.refetchQueries({ queryKey: ['appointments', 'all-shared'], type: 'all' })
+                      // Invalidate doctor dashboard stats
+                      queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-stats'] })
                       // Refetch the current appointment detail
                       refetchAppointment()
                     }}
@@ -197,7 +200,7 @@ export default function AppointmentDetailPage() {
               </DialogHeader>
               <TreatmentStageForm
                 appointmentId={appointment._id}
-                patientId={extractId(appointment.patient)}
+                clientId={extractId(appointment.client)}
                 doctorId={extractId(appointment.doctor)}
                 onSuccess={() => {
                   setOpenAddStage(false)
@@ -235,10 +238,10 @@ export default function AppointmentDetailPage() {
                   </span>
                 </p>
                 <p>
-                  <span className='font-semibold'>المريض:</span>{' '}
+                  <span className='font-semibold'>العميل:</span>{' '}
                   <span className='text-gray-700'>
-                    {typeof appointment.patient === 'object' && appointment.patient !== null
-                      ? appointment.patient.fullName
+                    {typeof appointment.client === 'object' && appointment.client !== null
+                      ? appointment.client.fullName
                       : '-'}
                   </span>
                 </p>

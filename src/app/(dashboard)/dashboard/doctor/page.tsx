@@ -19,7 +19,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { useTodayAppointments, useUpcomingAppointments, useDoctorPatientStats } from '@/hooks/useDoctorDashboard'
+import { useTodayAppointments, useUpcomingAppointments, useDoctorClientStats } from '@/hooks/useDoctorDashboard'
+import { useAllAppointments } from '@/hooks/useAppointments'
 import { useTreatmentStages } from '@/hooks/useTreatmentStages'
 import { useCurrentUser } from '@/hooks/useCurrentUser'
 import { TreatmentStageForm } from '@/components/treatment-stages/treatment-stage-form'
@@ -85,9 +86,13 @@ function DoctorDashboardContent() {
     }
   }, [permissions, canAddTreatmentStageFromAppointment, hasPermission, canAddTreatmentStage, currentUser])
 
+  // Activate polling for shared appointments cache by calling useAllAppointments
+  // This ensures appointments created by other users appear without refresh
+  useAllAppointments()
+  
   const { data: todayAppointments, isLoading: todayLoading } = useTodayAppointments()
   const { data: upcomingAppointments, isLoading: upcomingLoading } = useUpcomingAppointments()
-  const { data: stats, isLoading: statsLoading } = useDoctorPatientStats()
+  const { data: stats, isLoading: statsLoading } = useDoctorClientStats()
   const { data: treatmentStagesData, isLoading: stagesLoading } = useTreatmentStages()
 
   // Get user permissions to check if user can view treatment stage activities
@@ -428,7 +433,7 @@ function DoctorDashboardContent() {
           <CardHeader className='pb-2'>
             <CardTitle className='text-lg font-semibold text-gray-700 flex items-center gap-2'>
               <Users className='w-5 h-5 text-indigo-600' />
-              المرضى
+              العملاء
             </CardTitle>
           </CardHeader>
           <CardContent>
@@ -437,12 +442,12 @@ function DoctorDashboardContent() {
             ) : (
               <div className='flex items-center justify-between'>
                 <p className='text-3xl font-extrabold text-indigo-600'>
-                  {stats?.totalPatients || 0}
+                  {stats?.totalClients || 0}
                 </p>
                 <Button
                   variant='ghost'
                   size='sm'
-                  onClick={() => router.push('/patients')}
+                  onClick={() => router.push('/clients')}
                   className='h-8'
                 >
                   <Eye className='w-4 h-4' />
@@ -637,8 +642,8 @@ function DoctorDashboardContent() {
                                   {stage.title}
                                 </p>
                                 <p className='text-sm text-gray-600'>
-                                  {typeof stage.patient === 'object' && stage.patient !== null
-                                    ? ((stage.patient as { fullName?: string; name?: string }).fullName || (stage.patient as { fullName?: string; name?: string }).name || 'غير معروف')
+                                  {typeof stage.client === 'object' && stage.client !== null
+                                    ? ((stage.client as { fullName?: string; name?: string }).fullName || (stage.client as { fullName?: string; name?: string }).name || 'غير معروف')
                                     : 'غير معروف'}
                                 </p>
                                 <div className='flex items-center gap-2 mt-1'>
@@ -1082,17 +1087,17 @@ function DoctorDashboardContent() {
           <DialogHeader>
             <DialogTitle>إضافة مرحلة علاج جديدة</DialogTitle>
             <DialogDescription>
-              قم بإضافة مرحلة علاج جديدة للمريض
+              قم بإضافة مرحلة علاج جديدة للعميل
             </DialogDescription>
           </DialogHeader>
           {selectedAppointment && (
             <TreatmentStageForm
               appointmentId={selectedAppointment._id}
-              patientId={
-                typeof selectedAppointment.patient === 'object' &&
-                selectedAppointment.patient !== null
-                  ? selectedAppointment.patient._id
-                  : selectedAppointment.patient || ''
+              clientId={
+                typeof selectedAppointment.client === 'object' &&
+                selectedAppointment.client !== null
+                  ? selectedAppointment.client._id
+                  : selectedAppointment.client || ''
               }
               doctorId={
                 typeof selectedAppointment.doctor === 'object' &&
@@ -1183,8 +1188,8 @@ const AppointmentCard: React.FC<{
       <div className='flex justify-between items-start mb-2'>
         <div className='flex-1'>
           <p className='font-semibold text-lg text-indigo-700'>
-            {typeof appointment.patient === 'object' && appointment.patient !== null
-              ? appointment.patient.fullName
+            {typeof appointment.client === 'object' && appointment.client !== null
+              ? appointment.client.fullName
               : 'غير معروف'}
           </p>
           <p className='text-sm text-gray-600'>

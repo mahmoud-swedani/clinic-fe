@@ -75,12 +75,17 @@ export default function Navbar() {
             variant='outline' 
             onClick={handleLogout}
             disabled={isLoggingOut || isPending}
+            suppressHydrationWarning
           >
             {isLoggingOut || isPending ? 'جاري تسجيل الخروج...' : 'تسجيل الخروج'}
           </Button>
         </div>
       ) : (
-        <Button variant='outline' onClick={() => router.push('/login')}>
+        <Button 
+          variant='outline' 
+          onClick={() => router.push('/login')}
+          suppressHydrationWarning
+        >
           تسجيل الدخول
         </Button>
       )}

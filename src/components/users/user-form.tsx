@@ -27,8 +27,10 @@ import {
 
 import { useBranches } from '@/hooks/useBranches'
 import { useAllRoles } from '@/hooks/useRoles'
+import { useFormDepartments } from '@/hooks/useFormData'
 import { cn } from '@/lib/utils'
-import { PaginatedResponse } from '@/types/api'
+import { PaginatedResponse, Department } from '@/types/api'
+import { Checkbox } from '@/components/ui/checkbox'
 
 type Branch = {
   _id: string
@@ -42,6 +44,8 @@ type UserFormData = {
   confirmPassword: string
   role: string
   branch: string
+  departments: string[]
+  hasAllDepartments: boolean
   isActive: boolean
 }
 
@@ -61,16 +65,41 @@ export function UsersForm({ initialData, onSubmit, isLoading }: Props) {
   const typedBranchesResponse = branchesResponse as PaginatedResponse<Branch> | undefined
   const branches = typedBranchesResponse?.data || []
 
+  // Helper to extract department IDs from initialData
+  const getInitialDepartments = (): string[] => {
+    if (!initialData?.departments) return []
+    if (Array.isArray(initialData.departments)) {
+      return initialData.departments.map((dept) => {
+        if (typeof dept === 'string') return dept
+        if (typeof dept === 'object' && dept !== null) {
+          return (dept as { _id?: string; id?: string })._id || (dept as { _id?: string; id?: string }).id || ''
+        }
+        return ''
+      })
+    }
+    return []
+  }
+
   const [formData, setFormData] = useState<UserFormData>({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
     role: '',
-    branch: '',
+    branch: initialData?.branch 
+      ? (typeof initialData.branch === 'string' 
+          ? initialData.branch 
+          : (initialData.branch as { _id?: string; id?: string })._id || (initialData.branch as { _id?: string; id?: string }).id || '') 
+      : '',
+    departments: getInitialDepartments(),
+    hasAllDepartments: initialData?.hasAllDepartments || false,
     isActive: true,
     ...initialData,
   })
+
+  // Fetch departments based on selected branch
+  const { data: departments = [], isLoading: departmentsLoading } = useFormDepartments(formData.branch)
+
 
   const isEditing = Boolean(initialData)
 
@@ -105,6 +134,11 @@ export function UsersForm({ initialData, onSubmit, isLoading }: Props) {
     router.push('/users')
   }
 
+  // Check if role requires departments
+  const roleRequiresDepartments = (roleName: string): boolean => {
+    return roleName !== 'مدير' && roleName !== 'مالك' && roleName !== 'سكرتير'
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -113,11 +147,42 @@ export function UsersForm({ initialData, onSubmit, isLoading }: Props) {
       return
     }
 
+    // Validate departments for applicable roles
+    if (formData.role && roleRequiresDepartments(formData.role)) {
+      if (!formData.hasAllDepartments && (!formData.departments || formData.departments.length === 0)) {
+        toast.error('يجب تعيين قسم واحد على الأقل أو تفعيل خيار "جميع الأقسام" للمستخدمين من نوع طبيب أو محاسب')
+        return
+      }
+    }
+
     if (!isEditing) {
       setConfirmOpen(true)
     } else {
       handleConfirm()
     }
+  }
+
+  const handleDepartmentToggle = (departmentId: string) => {
+    setFormData((prev) => {
+      const currentDepts = prev.departments || []
+      const isSelected = currentDepts.includes(departmentId)
+      const newDepts = isSelected
+        ? currentDepts.filter((id) => id !== departmentId)
+        : [...currentDepts, departmentId]
+      return {
+        ...prev,
+        departments: newDepts,
+        hasAllDepartments: false, // Uncheck "all departments" if manually selecting
+      }
+    })
+  }
+
+  const handleAllDepartmentsToggle = (checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      hasAllDepartments: checked,
+      departments: checked ? [] : prev.departments, // Clear individual selections if "all" is selected
+    }))
   }
 
   return (
@@ -232,9 +297,15 @@ export function UsersForm({ initialData, onSubmit, isLoading }: Props) {
           <Label>الفرع</Label>
           <Select
             value={formData.branch}
-            onValueChange={(value) =>
-              setFormData({ ...formData, branch: value })
-            }
+            onValueChange={(value) => {
+              setFormData({ 
+                ...formData, 
+                branch: value,
+                // Clear departments when branch changes
+                departments: [],
+                hasAllDepartments: false
+              })
+            }}
           >
             <SelectTrigger>
               <SelectValue placeholder='اختر الفرع' />
@@ -254,6 +325,68 @@ export function UsersForm({ initialData, onSubmit, isLoading }: Props) {
             </SelectContent>
           </Select>
         </div>
+
+        {/* الأقسام - فقط للمستخدمين من نوع طبيب أو محاسب */}
+        {formData.role && roleRequiresDepartments(formData.role) && (
+          <div>
+            <Label>الأقسام</Label>
+            {!formData.branch ? (
+              <div className='text-sm text-muted-foreground border rounded-md p-4'>
+                يرجى اختيار الفرع أولاً لعرض الأقسام المتاحة
+              </div>
+            ) : (
+              <div className='space-y-3 border rounded-md p-4'>
+                <div className='flex items-center space-x-2 rtl:space-x-reverse'>
+                  <Checkbox
+                    id='all-departments'
+                    checked={formData.hasAllDepartments}
+                    onCheckedChange={handleAllDepartmentsToggle}
+                  />
+                  <Label
+                    htmlFor='all-departments'
+                    className='text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer'
+                  >
+                    جميع الأقسام
+                  </Label>
+                </div>
+                {departmentsLoading ? (
+                  <div className='text-sm text-muted-foreground'>
+                    جاري تحميل الأقسام...
+                  </div>
+                ) : departments && departments.length > 0 ? (
+                  <div className='space-y-2'>
+                    {departments.map((dept: Department) => {
+                      const deptId = dept._id || dept.id || ''
+                      return (
+                        <div
+                          key={deptId}
+                          className='flex items-center space-x-2 rtl:space-x-reverse'
+                        >
+                          <Checkbox
+                            id={`dept-${deptId}`}
+                            checked={formData.departments?.includes(deptId) || false}
+                            onCheckedChange={() => handleDepartmentToggle(deptId)}
+                            disabled={formData.hasAllDepartments}
+                          />
+                          <Label
+                            htmlFor={`dept-${deptId}`}
+                            className='text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer'
+                          >
+                            {dept.name}
+                          </Label>
+                        </div>
+                      )
+                    })}
+                  </div>
+                ) : (
+                  <div className='text-sm text-muted-foreground'>
+                    لا توجد أقسام متاحة في هذا الفرع
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* الحالة (نشط أم لا) */}
         <div className='flex items-center space-x-2 rtl:space-x-reverse'>

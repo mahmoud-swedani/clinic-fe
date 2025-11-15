@@ -1,20 +1,20 @@
 // src/hooks/useFormData.ts
-// Hooks for caching form data (patients, doctors, services, departments)
+// Hooks for caching form data (clients, doctors, services, departments)
 
 import { useQuery } from '@tanstack/react-query'
 import axios from '@/lib/axios'
-import { PaginatedResponse, Patient, User, Service, Department } from '@/types/api'
+import { PaginatedResponse, Client, User, Service, Department } from '@/types/api'
 
 /**
- * Hook to fetch and cache all patients (for forms)
+ * Hook to fetch and cache all clients (for forms)
  * Uses longer staleTime since this data doesn't change frequently
  */
-export function useFormPatients() {
+export function useFormClients() {
   return useQuery({
-    queryKey: ['form-data', 'patients'],
+    queryKey: ['form-data', 'clients'],
     queryFn: async () => {
-      // Fetch all patients with a high limit
-      const { data } = await axios.get<PaginatedResponse<Patient>>('/patients', {
+      // Fetch all clients with a high limit
+      const { data } = await axios.get<PaginatedResponse<Client>>('/clients', {
         params: { page: 1, limit: 1000 },
       })
       return data.data || []
@@ -114,18 +114,18 @@ export function useFormDepartments(branchId?: string) {
  * Useful when you need multiple form data sources
  */
 export function useAllFormData(branchId?: string) {
-  const patients = useFormPatients()
+  const clients = useFormClients()
   const doctors = useFormDoctors()
   const services = useFormServices()
   const departments = useFormDepartments(branchId)
 
   return {
-    patients: patients.data || [],
+    clients: clients.data || [],
     doctors: doctors.data || [],
     services: services.data || [],
     departments: departments.data || [],
-    isLoading: patients.isLoading || doctors.isLoading || services.isLoading || departments.isLoading,
-    isError: patients.isError || doctors.isError || services.isError || departments.isError,
+    isLoading: clients.isLoading || doctors.isLoading || services.isLoading || departments.isLoading,
+    isError: clients.isError || doctors.isError || services.isError || departments.isError,
   }
 }
 

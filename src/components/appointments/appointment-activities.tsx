@@ -73,7 +73,7 @@ export function AppointmentActivities({ appointmentId }: AppointmentActivitiesPr
 
   const formatFieldName = (field: string) => {
     const fieldNames: { [key: string]: string } = {
-      patient: 'المريض',
+      client: 'العميل',
       doctor: 'الطبيب',
       date: 'التاريخ والوقت',
       type: 'نوع الموعد',
@@ -207,8 +207,8 @@ export function AppointmentActivities({ appointmentId }: AppointmentActivitiesPr
                   <p className='text-sm font-semibold text-gray-700 mb-2'>البيانات المحذوفة:</p>
                   <div className='text-sm bg-gray-50 p-2 rounded'>
                     <p>
-                      <span className='font-medium'>المريض:</span>{' '}
-                      {formatFieldValue(beforeObj.patient)}
+                      <span className='font-medium'>العميل:</span>{' '}
+                      {formatFieldValue(beforeObj.client)}
                     </p>
                     <p>
                       <span className='font-medium'>الطبيب:</span>{' '}

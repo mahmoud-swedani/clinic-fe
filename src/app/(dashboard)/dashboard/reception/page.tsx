@@ -96,8 +96,8 @@ function ReceptionDashboardContent() {
     ? (typeof currentUser.branch === 'string' ? currentUser.branch : currentUser.branch._id)
     : undefined
   
-  // Fetch form data (patients, doctors, services, departments) for appointment form
-  const { patients, doctors, services, departments } = useAllFormData(branchId)
+  // Fetch form data (clients, services, departments) for appointment form
+  const { clients, services, departments } = useAllFormData(branchId)
 
   // Pagination state for activities
   const { page: activityPage, limit: activityLimit, goToPage: goToActivityPage, changeLimit: changeActivityLimit } = usePagination(20)
@@ -326,6 +326,10 @@ function ReceptionDashboardContent() {
       queryClient.invalidateQueries({ queryKey: ['appointments'] }) // Invalidate paginated queries used by /appointments page
       // Force refetch of ALL queries (not just active) to immediately update the UI for all users
       queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+      // Explicitly refetch the shared appointments cache used by doctor dashboard
+      queryClient.refetchQueries({ queryKey: ['appointments', 'all-shared'], type: 'all' })
+      // Invalidate doctor dashboard stats
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-stats'] })
       queryClient.invalidateQueries({ queryKey: ['appointment-activities'] })
     } catch (error: unknown) {
       // Revert optimistic update on error by invalidating
@@ -374,6 +378,10 @@ function ReceptionDashboardContent() {
       queryClient.invalidateQueries({ queryKey: ['appointments'] }) // Invalidate paginated queries used by /appointments page
       // Force refetch of ALL queries (not just active) to immediately update the UI for all users
       queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+      // Explicitly refetch the shared appointments cache used by doctor dashboard
+      queryClient.refetchQueries({ queryKey: ['appointments', 'all-shared'], type: 'all' })
+      // Invalidate doctor dashboard stats
+      queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-stats'] })
       queryClient.invalidateQueries({ queryKey: ['appointment-activities'] })
     } catch {
       toast.error('حدث خطأ أثناء تحديث المواعيد')
@@ -436,20 +444,20 @@ function ReceptionDashboardContent() {
           <CardHeader>
             <CardTitle className='text-xl font-bold text-gray-800 flex items-center gap-2'>
               <Users className='w-6 h-6 text-indigo-600' />
-              تسجيل مريض جديد
+              تسجيل عميل جديد
             </CardTitle>
             <CardDescription>
-              قم بتسجيل مريض جديد في النظام
+              قم بتسجيل عميل جديد في النظام
             </CardDescription>
           </CardHeader>
           <CardContent>
             <Button 
               className='w-full' 
               size='lg'
-              onClick={() => router.push('/patients/new')}
+              onClick={() => router.push('/clients/new')}
             >
               <Plus className='w-5 h-5 mr-2' />
-              إضافة مريض جديد
+              إضافة عميل جديد
             </Button>
           </CardContent>
         </Card>
@@ -461,7 +469,7 @@ function ReceptionDashboardContent() {
               حجز موعد جديد
             </CardTitle>
             <CardDescription>
-              قم بحجز موعد جديد للمريض
+              قم بحجز موعد جديد للعميل
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -480,8 +488,7 @@ function ReceptionDashboardContent() {
                   </DialogDescription>
                 </DialogHeader>
                 <AppointmentForm
-                  patients={patients}
-                  doctors={doctors}
+                  clients={clients}
                   services={services}
                   departments={departments}
                   onSuccess={() => {
@@ -490,6 +497,10 @@ function ReceptionDashboardContent() {
                     queryClient.invalidateQueries({ queryKey: ['appointments', 'all-shared'] })
                     // Force refetch of ALL queries (not just active) to immediately update the UI for all users
                     queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+                    // Explicitly refetch the shared appointments cache used by doctor dashboard
+                    queryClient.refetchQueries({ queryKey: ['appointments', 'all-shared'], type: 'all' })
+                    // Invalidate doctor dashboard stats
+                    queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-stats'] })
                     setOpenAddAppointment(false)
                     // Toast is already shown by AppointmentForm component
                   }}
@@ -674,7 +685,7 @@ function ReceptionDashboardContent() {
                         <table className='w-full text-sm text-right'>
                           <thead>
                             <tr className='border-b bg-white'>
-                              <th className='px-4 py-3 font-semibold text-gray-700'>المريض</th>
+                              <th className='px-4 py-3 font-semibold text-gray-700'>العميل</th>
                               <th className='px-4 py-3 font-semibold text-gray-700'>التاريخ</th>
                               <th className='px-4 py-3 font-semibold text-gray-700'>الأيام المتأخرة</th>
                               <th className='px-4 py-3 font-semibold text-gray-700'>الحالة</th>
@@ -690,8 +701,8 @@ function ReceptionDashboardContent() {
                               >
                                 <td className='px-4 py-3'>
                                   <p className='font-semibold text-gray-800'>
-                                    {typeof appointment.patient === 'object' && appointment.patient !== null
-                                      ? appointment.patient.fullName
+                                    {typeof appointment.client === 'object' && appointment.client !== null
+                                      ? appointment.client.fullName
                                       : 'غير معروف'}
                                   </p>
                                 </td>
@@ -852,8 +863,8 @@ function ReceptionDashboardContent() {
                     <div className='flex justify-between items-start mb-2'>
                       <div className='flex-1'>
                         <p className='font-semibold text-lg text-indigo-700'>
-                          {typeof appointment.patient === 'object' && appointment.patient !== null
-                            ? appointment.patient.fullName
+                          {typeof appointment.client === 'object' && appointment.client !== null
+                            ? appointment.client.fullName
                             : 'غير معروف'}
                         </p>
                         <div className='flex items-center gap-2'>
@@ -1012,8 +1023,8 @@ function ReceptionDashboardContent() {
                     <div className='flex justify-between items-start mb-2'>
                       <div>
                         <p className='font-semibold text-lg text-indigo-700'>
-                          {typeof appointment.patient === 'object' && appointment.patient !== null
-                            ? appointment.patient.fullName
+                          {typeof appointment.client === 'object' && appointment.client !== null
+                            ? appointment.client.fullName
                             : 'غير معروف'}
                         </p>
                         <div className='flex items-center gap-2'>
@@ -1309,8 +1320,7 @@ function ReceptionDashboardContent() {
             </DialogHeader>
             {selectedAppointment && (
               <AppointmentForm
-                patients={patients}
-                doctors={doctors}
+                clients={clients}
                 services={services}
                 departments={departments}
                 initialData={selectedAppointment}
@@ -1322,6 +1332,10 @@ function ReceptionDashboardContent() {
                   queryClient.invalidateQueries({ queryKey: ['appointments', 'all-shared'] })
                   // Force refetch of ALL queries (not just active) to immediately update the UI for all users
                   queryClient.refetchQueries({ queryKey: ['appointments'], type: 'all' })
+                  // Explicitly refetch the shared appointments cache used by doctor dashboard
+                  queryClient.refetchQueries({ queryKey: ['appointments', 'all-shared'], type: 'all' })
+                  // Invalidate doctor dashboard stats
+                  queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-stats'] })
                 }}
               />
             )}

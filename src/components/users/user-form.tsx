@@ -408,14 +408,16 @@ export function UsersForm({ initialData, onSubmit, isLoading }: Props) {
 
       {/* نافذة التأكيد */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
+        <DialogContent className='max-w-[95vw] w-full sm:max-w-md'>
           <DialogHeader>
             <DialogTitle>تأكيد إنشاء المستخدم</DialogTitle>
             <DialogDescription>
               هل أنت متأكد أنك تريد إنشاء هذا المستخدم؟
             </DialogDescription>
           </DialogHeader>
-          <p>هل أنت متأكد أنك تريد إنشاء هذا المستخدم؟</p>
+          <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+            <p>هل أنت متأكد أنك تريد إنشاء هذا المستخدم؟</p>
+          </div>
           <DialogFooter>
             <Button variant='outline' onClick={() => setConfirmOpen(false)}>
               إلغاء

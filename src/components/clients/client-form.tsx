@@ -1249,7 +1249,7 @@ export function ClientForm({
 
       {/* Confirmation Dialog - Shows after clicking save */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent>
+        <DialogContent className='max-w-[95vw] w-full sm:max-w-md'>
           <DialogHeader>
             <DialogTitle>تأكيد {isEditing ? 'تحديث' : 'إنشاء'} العميل</DialogTitle>
             <DialogDescription>

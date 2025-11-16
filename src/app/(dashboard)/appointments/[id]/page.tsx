@@ -1,7 +1,7 @@
 // src/app/(dashboard)/appointments/[id]/page.tsx
 'use client'
 
-import React, { useState } from 'react'
+import React, { useState, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import axios from '@/lib/axios'
 import { Card, CardContent } from '@/components/ui/card'
@@ -18,7 +18,7 @@ import {
 import moment from 'moment'
 import { TreatmentStageForm } from '@/components/treatment-stages/treatment-stage-form'
 import { motion } from 'framer-motion'
-import { Appointment, Client, User, TreatmentStage, ApiResponse } from '@/types/api'
+import { Appointment, Client, User, TreatmentStage, AppointmentService, ApiResponse } from '@/types/api'
 import { useUserPermissions } from '@/hooks/usePermissions'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CheckCircle2, XCircle, Pencil } from 'lucide-react'
@@ -76,6 +76,16 @@ export default function AppointmentDetailPage() {
     enabled: !!appointmentId,
   })
 
+  // Fetch appointment services
+  const { data: appointmentServices = [] } = useQuery({
+    queryKey: ['appointment-services', appointmentId],
+    queryFn: async () => {
+      const { data } = await axios.get(`/appointments/${appointmentId}/services`)
+      return data.data || []
+    },
+    enabled: !!appointmentId,
+  })
+
   // Fetch treatment stages for this appointment
   const { data: treatmentStagesData, refetch: refetchStages } = useQuery({
     queryKey: ['treatment-stages', 'appointment', appointmentId],
@@ -90,7 +100,43 @@ export default function AppointmentDetailPage() {
     },
   })
 
-  const treatmentStages = treatmentStagesData || []
+  const treatmentStages = useMemo(() => treatmentStagesData || [], [treatmentStagesData])
+
+  // Group treatment stages by service
+  const stagesByService = useMemo(() => {
+    const grouped: Record<string, TreatmentStage[]> = {}
+    
+    // Initialize with all services
+    appointmentServices.forEach((as: AppointmentService) => {
+      grouped[as._id] = []
+    })
+    
+    // Group stages by appointmentService
+    treatmentStages.forEach((stage) => {
+      const serviceId = typeof stage.appointmentService === 'object' && stage.appointmentService !== null
+        ? (stage.appointmentService as { _id?: string })._id
+        : stage.appointmentService
+        
+      if (serviceId) {
+        if (!grouped[serviceId]) {
+          grouped[serviceId] = []
+        }
+        grouped[serviceId].push(stage)
+      } else if (stage.appointment) {
+        // Fallback: stages without appointmentService (old format)
+        // Distribute to first service or create a "general" group
+        const firstServiceId = appointmentServices[0]?._id
+        if (firstServiceId) {
+          if (!grouped[firstServiceId]) {
+            grouped[firstServiceId] = []
+          }
+          grouped[firstServiceId].push(stage)
+        }
+      }
+    })
+    
+    return grouped
+  }, [treatmentStages, appointmentServices])
 
   // Fetch form data using cached hooks (data is cached globally)
   const { clients: patients, services, departments } = useAllFormData(branchId)
@@ -151,15 +197,16 @@ export default function AppointmentDetailPage() {
                   تعديل الموعد
                 </Button>
               </DialogTrigger>
-              <DialogContent className='max-w-xl' dir='rtl'>
+              <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
                 <DialogHeader>
                   <DialogTitle>تعديل الموعد</DialogTitle>
                   <DialogDescription>
                     قم بتعديل بيانات الموعد
                   </DialogDescription>
                 </DialogHeader>
-                {appointment && (
-                  <AppointmentForm
+                <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                  {appointment && (
+                    <AppointmentForm
                     clients={patients}
                     services={services}
                     departments={departments}
@@ -180,7 +227,8 @@ export default function AppointmentDetailPage() {
                       refetchAppointment()
                     }}
                   />
-                )}
+                  )}
+                </div>
               </DialogContent>
             </Dialog>
           )}
@@ -191,14 +239,15 @@ export default function AppointmentDetailPage() {
                   إضافة مرحلة علاج
                 </Button>
               </DialogTrigger>
-            <DialogContent className='max-w-md' dir='rtl'>
+            <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
               <DialogHeader>
                 <DialogTitle>إضافة مرحلة علاج</DialogTitle>
                 <DialogDescription>
                   أضف مرحلة علاجية جديدة للموعد
                 </DialogDescription>
               </DialogHeader>
-              <TreatmentStageForm
+              <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                <TreatmentStageForm
                 appointmentId={appointment._id}
                 clientId={extractId(appointment.client)}
                 doctorId={extractId(appointment.doctor)}
@@ -206,7 +255,8 @@ export default function AppointmentDetailPage() {
                   setOpenAddStage(false)
                   refetchStages()
                 }}
-              />
+                />
+              </div>
             </DialogContent>
           </Dialog>
           )}
@@ -254,10 +304,14 @@ export default function AppointmentDetailPage() {
                   </span>
                 </p>
                 <p>
-                  <span className='font-semibold'>الخدمة:</span>{' '}
+                  <span className='font-semibold'>الخدمات:</span>{' '}
                   <span className='text-gray-700'>
-                    {typeof appointment.service === 'object' && appointment.service !== null
-                      ? appointment.service.name
+                    {appointment.services && Array.isArray(appointment.services) && appointment.services.length > 0
+                      ? appointment.services.map((s) => 
+                          typeof s === 'object' ? s.name : s
+                        ).join(', ')
+                      : appointment.service
+                        ? (typeof appointment.service === 'object' ? appointment.service.name : appointment.service)
                       : '-'}
                   </span>
                 </p>
@@ -297,7 +351,7 @@ export default function AppointmentDetailPage() {
           </CardContent>
         </Card>
 
-        {/* مراحل العلاج */}
+        {/* مراحل العلاج - مجمعة حسب الخدمة */}
         <Card className='bg-white shadow-lg rounded-2xl overflow-hidden'>
           <CardContent className='p-6 space-y-4'>
             <motion.h2
@@ -309,7 +363,97 @@ export default function AppointmentDetailPage() {
               مراحل العلاج
             </motion.h2>
 
-            {treatmentStages.length > 0 ? (
+            {appointmentServices.length > 0 ? (
+              <div className='space-y-6'>
+                {appointmentServices.map((appointmentService: AppointmentService) => {
+                  const service = typeof appointmentService.service === 'object' 
+                    ? appointmentService.service 
+                    : null
+                  const serviceStages = stagesByService[appointmentService._id] || []
+                  
+                  return (
+                    <div key={appointmentService._id} className='border rounded-lg p-4 space-y-3'>
+                      <h3 className='font-semibold text-lg'>
+                        {service?.name || 'خدمة غير معروفة'}
+                      </h3>
+                      {serviceStages.length > 0 ? (
+                        <div className='space-y-3'>
+                          {serviceStages.map((stage: TreatmentStage) => (
+                  <motion.div
+                    key={stage._id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className='border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition-colors'
+                  >
+                    <div className='flex justify-between items-start mb-2'>
+                      <h3 className='text-lg font-semibold text-gray-800'>
+                        {stage.title}
+                      </h3>
+                      <div className='flex items-center gap-2'>
+                        {canEditStage && (
+                          <Button
+                            variant='ghost'
+                            size='sm'
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              setSelectedStage(stage)
+                              setOpenEditStage(true)
+                            }}
+                            className='h-8 w-8 p-0'
+                            title='تعديل المرحلة'
+                          >
+                            <Pencil className='w-4 h-4' />
+                          </Button>
+                        )}
+                        {stage.isCompleted ? (
+                          <CheckCircle2 className='text-green-600 w-5 h-5' />
+                        ) : (
+                          <XCircle className='text-red-600 w-5 h-5' />
+                        )}
+                        <Badge
+                          variant={stage.isCompleted ? 'default' : 'outline'}
+                          className='text-xs'
+                        >
+                          {stage.isCompleted ? 'مكتملة' : 'غير مكتملة'}
+                        </Badge>
+                      </div>
+                    </div>
+                    {stage.description && (
+                      <p className='text-gray-700 mb-2'>{stage.description}</p>
+                    )}
+                    <div className='grid grid-cols-1 md:grid-cols-3 gap-2 text-sm text-gray-600'>
+                      <p>
+                        <span className='font-semibold'>التاريخ:</span>{' '}
+                        {stage.date
+                          ? moment(stage.date).format('YYYY-MM-DD HH:mm')
+                          : '-'}
+                      </p>
+                      <p>
+                        <span className='font-semibold'>الطبيب:</span>{' '}
+                        {typeof stage.doctor === 'object' && stage.doctor !== null
+                          ? stage.doctor.name
+                          : '-'}
+                      </p>
+                      <p>
+                        <span className='font-semibold'>التكلفة:</span>{' '}
+                        {stage.cost ? `${stage.cost.toLocaleString()} ل.س` : '0 ل.س'}
+                      </p>
+                    </div>
+                          </motion.div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className='text-sm text-gray-500 py-2'>
+                          لا توجد مراحل علاجية لهذه الخدمة
+                        </p>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            ) : treatmentStages.length > 0 ? (
+              // Fallback: show all stages if no services structure
               <div className='space-y-3'>
                 {treatmentStages.map((stage: TreatmentStage) => (
                   <motion.div
@@ -405,13 +549,14 @@ export default function AppointmentDetailPage() {
       {/* Edit Stage Dialog */}
       {canEditStage && (
         <Dialog open={openEditStage} onOpenChange={setOpenEditStage}>
-          <DialogContent className='max-w-2xl' dir='rtl'>
+          <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
             <DialogHeader>
               <DialogTitle>تعديل المرحلة العلاجية</DialogTitle>
               <DialogDescription>قم بتعديل بيانات المرحلة العلاجية</DialogDescription>
             </DialogHeader>
-            {selectedStage && (
-              <TreatmentStageEditForm
+            <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+              {selectedStage && (
+                <TreatmentStageEditForm
                 stage={selectedStage}
                 onSuccess={() => {
                   setOpenEditStage(false)
@@ -422,8 +567,9 @@ export default function AppointmentDetailPage() {
                   setOpenEditStage(false)
                   setSelectedStage(null)
                 }}
-              />
-            )}
+                />
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       )}

@@ -1,7 +1,7 @@
 // src/app/(dashboard)/dashboard/doctor/page.tsx
 'use client'
 
-import React, { useState, Suspense, useEffect } from 'react'
+import React, { useState, Suspense, useEffect, useMemo } from 'react'
 import {
   Card,
   CardContent,
@@ -27,10 +27,10 @@ import { TreatmentStageForm } from '@/components/treatment-stages/treatment-stag
 import { TreatmentStageEditForm } from '@/components/treatment-stages/treatment-stage-edit-form'
 import { format, startOfToday, endOfToday, isWithinInterval, startOfTomorrow, endOfTomorrow, startOfMonth, endOfMonth, addMonths, addDays, endOfDay, isToday, isPast, formatDistanceToNow, differenceInDays } from 'date-fns'
 import { arSA } from 'date-fns/locale'
-import { Calendar, Users, ClipboardList, TrendingUp, Plus, Eye, Clock, Activity, Pencil, CheckCircle2, XCircle, RefreshCw, FileEdit, Trash2, Search, X, AlertCircle } from 'lucide-react'
+import { Calendar, Users, ClipboardList, TrendingUp, Plus, Eye, Clock, Activity, Pencil, CheckCircle2, XCircle, RefreshCw, FileEdit, Trash2, Search, X, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react'
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion'
 import { toast } from 'sonner'
-import { Appointment, TreatmentStage, PaginatedResponse, AuditLog } from '@/types/api'
+import { Appointment, TreatmentStage, PaginatedResponse, AuditLog, AppointmentService } from '@/types/api'
 import { useUserPermissions } from '@/hooks/usePermissions'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import axios from '@/lib/axios'
@@ -55,6 +55,7 @@ function DoctorDashboardContent() {
   const [openAddStage, setOpenAddStage] = useState(false)
   const [openEditStage, setOpenEditStage] = useState(false)
   const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null)
+  const [selectedAppointmentService, setSelectedAppointmentService] = useState<string | null>(null)
   const [selectedStage, setSelectedStage] = useState<TreatmentStage | null>(null)
   const [nextAppointmentFilter, setNextAppointmentFilter] = useState<NextAppointmentFilter>('tomorrow')
   const [incompleteStageFilter, setIncompleteStageFilter] = useState<'all' | 'overdue' | 'recent'>('all')
@@ -376,8 +377,9 @@ function DoctorDashboardContent() {
   const nextMonthCount = getAppointmentsForPeriod('nextMonth').length
 
 
-  const openStageDialog = (appointment: Appointment) => {
+  const openStageDialog = (appointment: Appointment, appointmentServiceId?: string) => {
     setSelectedAppointment(appointment)
+    setSelectedAppointmentService(appointmentServiceId || null)
     setOpenAddStage(true)
   }
 
@@ -1083,15 +1085,16 @@ function DoctorDashboardContent() {
 
       {/* Quick Add Treatment Stage Dialog */}
       <Dialog open={openAddStage} onOpenChange={setOpenAddStage}>
-        <DialogContent className='max-w-xl'>
+        <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl'>
           <DialogHeader>
             <DialogTitle>إضافة مرحلة علاج جديدة</DialogTitle>
             <DialogDescription>
               قم بإضافة مرحلة علاج جديدة للعميل
             </DialogDescription>
           </DialogHeader>
-          {selectedAppointment && (
-            <TreatmentStageForm
+          <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+            {selectedAppointment && (
+              <TreatmentStageForm
               appointmentId={selectedAppointment._id}
               clientId={
                 typeof selectedAppointment.client === 'object' &&
@@ -1105,34 +1108,41 @@ function DoctorDashboardContent() {
                   ? selectedAppointment.doctor._id
                   : selectedAppointment.doctor || ''
               }
+              appointmentServiceId={selectedAppointmentService || undefined}
               onSuccess={() => {
                 setOpenAddStage(false)
                 if (selectedAppointment) {
-                  // Invalidate the specific appointment's treatment stages
+                  // Invalidate the specific appointment's treatment stages and services
                   queryClient.invalidateQueries({ 
                     queryKey: ['treatment-stages', 'appointment', selectedAppointment._id] 
                   })
+                  queryClient.invalidateQueries({ 
+                    queryKey: ['appointment-services', selectedAppointment._id] 
+                  })
                 }
                 setSelectedAppointment(null)
+                setSelectedAppointmentService(null)
                 queryClient.invalidateQueries({ queryKey: ['treatment-stages'] })
                 queryClient.invalidateQueries({ queryKey: ['doctor', 'patient-stats'] })
                 queryClient.invalidateQueries({ queryKey: ['appointments', 'doctor'] })
               }}
-            />
-          )}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
 
       {/* Edit Treatment Stage Dialog */}
       {canEditStage && (
         <Dialog open={openEditStage} onOpenChange={setOpenEditStage}>
-          <DialogContent className='max-w-2xl' dir='rtl'>
+          <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
             <DialogHeader>
               <DialogTitle>تعديل المرحلة العلاجية</DialogTitle>
               <DialogDescription>قم بتعديل بيانات المرحلة العلاجية</DialogDescription>
             </DialogHeader>
-            {selectedStage && (
-              <TreatmentStageEditForm
+            <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+              {selectedStage && (
+                <TreatmentStageEditForm
                 stage={selectedStage}
                 onSuccess={() => {
                   setOpenEditStage(false)
@@ -1151,8 +1161,9 @@ function DoctorDashboardContent() {
                   setOpenEditStage(false)
                   setSelectedStage(null)
                 }}
-              />
-            )}
+                />
+              )}
+            </div>
           </DialogContent>
         </Dialog>
       )}
@@ -1165,13 +1176,24 @@ const AppointmentCard: React.FC<{
   appointment: Appointment
   canManageTreatmentStages: boolean
   canEditStage: boolean
-  onAddStage: (appointment: Appointment) => void
+  onAddStage: (appointment: Appointment, appointmentServiceId?: string) => void
   onEditStage: (stage: TreatmentStage) => void
 }> = ({ appointment, canManageTreatmentStages, canEditStage, onAddStage, onEditStage }) => {
-  const [showStages, setShowStages] = useState(false)
+  const [showServices, setShowServices] = useState(false)
   
-  // Use React Query to fetch treatment stages for this appointment
-  const { data: stagesData, isLoading: loadingStages } = useQuery({
+  // Fetch appointment services
+  const { data: appointmentServices = [], isLoading: loadingServices } = useQuery({
+    queryKey: ['appointment-services', appointment._id],
+    queryFn: async () => {
+      const { data } = await axios.get(`/appointments/${appointment._id}/services`)
+      return (data?.data || []) as AppointmentService[]
+    },
+    enabled: !!appointment._id,
+    staleTime: 1 * 60 * 1000, // 1 minute
+  })
+
+  // Fetch all treatment stages for this appointment
+  const { data: allStagesData = [], isLoading: loadingStages } = useQuery({
     queryKey: ['treatment-stages', 'appointment', appointment._id],
     queryFn: async () => {
       const { data } = await axios.get(`/treatment-stages/appointment/${appointment._id}`)
@@ -1181,7 +1203,35 @@ const AppointmentCard: React.FC<{
     staleTime: 1 * 60 * 1000, // 1 minute
   })
 
-  const stages = stagesData || []
+  // Group treatment stages by appointmentService
+  const stagesByService = useMemo(() => {
+    const grouped: Record<string, TreatmentStage[]> = {}
+    
+    // Initialize with all services
+    appointmentServices.forEach((as) => {
+      grouped[as._id] = []
+    })
+    
+    // Group stages by appointmentService
+    allStagesData.forEach((stage) => {
+      const serviceId = typeof stage.appointmentService === 'object' && stage.appointmentService !== null
+        ? (stage.appointmentService as { _id?: string })._id
+        : stage.appointmentService
+        
+      if (serviceId && grouped[serviceId]) {
+        grouped[serviceId].push(stage)
+      } else if (stage.appointment) {
+        // Fallback: stages without appointmentService (old format)
+        // Distribute to first service if available
+        const firstServiceId = appointmentServices[0]?._id
+        if (firstServiceId && grouped[firstServiceId]) {
+          grouped[firstServiceId].push(stage)
+        }
+      }
+    })
+    
+    return grouped
+  }, [allStagesData, appointmentServices])
 
   return (
     <div className='border border-gray-200 rounded-lg p-4 hover:bg-gray-50 transition'>
@@ -1212,90 +1262,124 @@ const AppointmentCard: React.FC<{
           </Badge>
         </div>
       </div>
-      {appointment.service && (
-        <p className='text-sm text-gray-500 mb-2'>
-          الخدمة:{' '}
-          {typeof appointment.service === 'object' && appointment.service !== null
-            ? appointment.service.name
-            : appointment.service || '-'}
-        </p>
-      )}
-      
-      {/* Treatment Stages Section */}
+      {/* Services and Treatment Stages Section */}
       <div className='mt-3 pt-3 border-t border-gray-200'>
         <div className='flex justify-between items-center mb-2'>
           <Button
             variant='ghost'
             size='sm'
             onClick={() => {
-              setShowStages(!showStages)
+              setShowServices(!showServices)
             }}
             className='text-sm'
           >
             <ClipboardList className='w-4 h-4 mr-1' />
-            المراحل العلاجية ({stages.length || 0})
+            الخدمات والمراحل ({appointmentServices.length || 0})
+            {showServices ? (
+              <ChevronUp className='w-4 h-4 mr-1' />
+            ) : (
+              <ChevronDown className='w-4 h-4 mr-1' />
+            )}
           </Button>
-          {canManageTreatmentStages && (
-            <Button
-              size='sm'
-              variant='outline'
-              onClick={() => onAddStage(appointment)}
-              className='flex items-center gap-1'
-            >
-              <Plus className='w-4 h-4' />
-              إضافة مرحلة
-            </Button>
-          )}
         </div>
         
-        {showStages && (
-          <div className='mt-2 space-y-2'>
-            {loadingStages ? (
-              <Skeleton className='h-12 w-full' />
-            ) : stages.length > 0 ? (
-              stages.map((stage: TreatmentStage) => (
-                <div
-                  key={stage._id}
-                  className={cn(
-                    'p-2 rounded border text-sm',
-                    stage.isCompleted
-                      ? 'border-green-400 bg-green-50'
-                      : 'border-gray-300 bg-gray-50'
-                  )}
-                >
-                  <div className='flex justify-between items-center'>
-                    <div className='flex-1'>
-                      <p className='font-medium'>{stage.title}</p>
-                      {stage.description && (
-                        <p className='text-xs text-gray-600'>{stage.description}</p>
-                      )}
-                    </div>
-                    <div className='flex items-center gap-2'>
-                      {canEditStage && (
+        {showServices && (
+          <div className='mt-2 space-y-3'>
+            {loadingServices ? (
+              <Skeleton className='h-24 w-full' />
+            ) : appointmentServices.length > 0 ? (
+              appointmentServices.map((appointmentService: AppointmentService) => {
+                const service = typeof appointmentService.service === 'object' && appointmentService.service !== null
+                  ? appointmentService.service
+                  : null
+                const treatmentStages = stagesByService[appointmentService._id] || []
+                
+                return (
+                  <div
+                    key={appointmentService._id}
+                    className='border border-gray-300 rounded-lg p-3 bg-gray-50'
+                  >
+                    <div className='flex justify-between items-center mb-2'>
+                      <div className='flex-1'>
+                        <h4 className='font-semibold text-base text-gray-800'>
+                          {service?.name || 'خدمة غير معروفة'}
+                        </h4>
+                        {service?.price && (
+                          <p className='text-xs text-gray-600 mt-1'>
+                            السعر: {service.price.toLocaleString()} ل.س
+                          </p>
+                        )}
+                      </div>
+                      {canManageTreatmentStages && (
                         <Button
-                          variant='ghost'
                           size='sm'
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            onEditStage(stage)
-                          }}
-                          className='h-6 w-6 p-0'
+                          variant='outline'
+                          onClick={() => onAddStage(appointment, appointmentService._id)}
+                          className='flex items-center gap-1'
                         >
-                          <Pencil className='w-3 h-3' />
+                          <Plus className='w-4 h-4' />
+                          إضافة مرحلة
                         </Button>
                       )}
-                      {stage.isCompleted ? (
-                        <CheckCircle2 className='w-4 h-4 text-green-600' />
+                    </div>
+                    
+                    {/* Treatment Stages for this Service */}
+                    <div className='mt-2 space-y-2'>
+                      {loadingStages ? (
+                        <Skeleton className='h-12 w-full' />
+                      ) : treatmentStages.length > 0 ? (
+                        treatmentStages.map((stage: TreatmentStage) => (
+                          <div
+                            key={stage._id}
+                            className={cn(
+                              'p-2 rounded border text-sm',
+                              stage.isCompleted
+                                ? 'border-green-400 bg-green-50'
+                                : 'border-gray-300 bg-gray-50'
+                            )}
+                          >
+                            <div className='flex justify-between items-center'>
+                              <div className='flex-1'>
+                                <p className='font-medium'>{stage.title}</p>
+                                {stage.description && (
+                                  <p className='text-xs text-gray-600'>{stage.description}</p>
+                                )}
+                              </div>
+                              <div className='flex items-center gap-2'>
+                                {canEditStage && (
+                                  <Button
+                                    variant='ghost'
+                                    size='sm'
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      onEditStage(stage)
+                                    }}
+                                    className='h-6 w-6 p-0'
+                                  >
+                                    <Pencil className='w-3 h-3' />
+                                  </Button>
+                                )}
+                                {stage.isCompleted ? (
+                                  <CheckCircle2 className='w-4 h-4 text-green-600' />
+                                ) : (
+                                  <XCircle className='w-4 h-4 text-red-600' />
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        ))
                       ) : (
-                        <XCircle className='w-4 h-4 text-red-600' />
+                        <p className='text-xs text-gray-500 text-center py-2'>
+                          لا توجد مراحل علاجية لهذه الخدمة
+                        </p>
                       )}
                     </div>
                   </div>
-                </div>
-              ))
+                )
+              })
             ) : (
               <p className='text-xs text-gray-500 text-center py-2'>
-                لا توجد مراحل علاجية
+                لا توجد خدمات لهذا الموعد
               </p>
             )}
           </div>

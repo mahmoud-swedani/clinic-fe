@@ -254,14 +254,15 @@ function AppointmentsContent() {
             <DialogTrigger asChild>
               <Button>إضافة موعد {canManageAppointments ? '(✓)' : '(✗)'}</Button>
             </DialogTrigger>
-            <DialogContent className='max-w-xl' dir='rtl'>
+            <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
               <DialogHeader>
                 <DialogTitle>{editingAppointment ? 'تعديل الموعد' : 'إضافة موعد جديد'}</DialogTitle>
                 <DialogDescription>
                   {editingAppointment ? 'قم بتعديل بيانات الموعد' : 'قم بملء البيانات لإضافة موعد جديد'}
                 </DialogDescription>
               </DialogHeader>
-              <AppointmentForm
+              <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                <AppointmentForm
                 clients={clients}
                 services={services}
                 departments={departments}
@@ -281,7 +282,8 @@ function AppointmentsContent() {
                   setOpenForm(false)
                   setEditingAppointment(null)
                 }}
-              />
+                />
+              </div>
             </DialogContent>
           </Dialog>
         </div>
@@ -471,7 +473,7 @@ function AppointmentsContent() {
                                   </DialogTrigger>
                                   {openAddStage && selectedAppointment && selectedAppointment._id === appt._id && (
                                     <DialogContent 
-                                      className='max-w-lg' 
+                                      className='max-w-[95vw] w-full sm:max-w-2xl' 
                                       dir='rtl'
                                       onClick={(e) => e.stopPropagation()}
                                       onPointerDown={(e) => e.stopPropagation()}
@@ -482,7 +484,8 @@ function AppointmentsContent() {
                                           أضف مرحلة علاجية جديدة للموعد
                                         </DialogDescription>
                                       </DialogHeader>
-                                      <TreatmentStageForm
+                                      <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                                        <TreatmentStageForm
                                         appointmentId={selectedAppointment._id}
                                         clientId={extractId(selectedAppointment.client)}
                                         doctorId={extractId(selectedAppointment.doctor)}
@@ -491,7 +494,8 @@ function AppointmentsContent() {
                                           setSelectedAppointment(null)
                                           refetch()
                                         }}
-                                      />
+                                        />
+                                      </div>
                                     </DialogContent>
                                   )}
                                 </Dialog>

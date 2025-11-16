@@ -12,6 +12,22 @@ const nextConfig: NextConfig = {
       '@tanstack/react-query',
     ],
   },
+  // Headers configuration for CSP
+  async headers() {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'Content-Security-Policy',
+            value: process.env.NODE_ENV === 'development'
+              ? "script-src 'self' 'unsafe-eval' 'unsafe-inline'; object-src 'none';"
+              : "script-src 'self' 'unsafe-inline'; object-src 'none';",
+          },
+        ],
+      },
+    ];
+  },
   // Turbopack configuration (when using --turbo flag)
   // Turbopack is zero-configuration by default
   // This config is defined to satisfy the warning about webpack being configured

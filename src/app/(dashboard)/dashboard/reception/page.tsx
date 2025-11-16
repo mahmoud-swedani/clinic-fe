@@ -480,14 +480,15 @@ function ReceptionDashboardContent() {
                   حجز موعد
                 </Button>
               </DialogTrigger>
-              <DialogContent className='max-w-xl'>
+              <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl'>
                 <DialogHeader>
                   <DialogTitle>حجز موعد جديد</DialogTitle>
                   <DialogDescription>
                     قم بملء البيانات لحجز موعد جديد
                   </DialogDescription>
                 </DialogHeader>
-                <AppointmentForm
+                <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                  <AppointmentForm
                   clients={clients}
                   services={services}
                   departments={departments}
@@ -505,6 +506,7 @@ function ReceptionDashboardContent() {
                     // Toast is already shown by AppointmentForm component
                   }}
                 />
+                </div>
               </DialogContent>
             </Dialog>
           </CardContent>

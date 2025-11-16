@@ -67,6 +67,19 @@ export function AppointmentForm({
   const [userId, setUserId] = useState<string>(
     initialData ? extractId(initialData.doctor) : ''
   )
+  // Support both old (service) and new (services) format
+  const getInitialServices = useCallback((): string[] => {
+    if (initialData) {
+      if (initialData.services && Array.isArray(initialData.services) && initialData.services.length > 0) {
+        return initialData.services.map((s) => extractId(s))
+      } else if (initialData.service) {
+        return [extractId(initialData.service)]
+      }
+    }
+    return []
+  }, [initialData, extractId])
+  const [selectedServices, setSelectedServices] = useState<string[]>(getInitialServices())
+  // Keep serviceId for backward compatibility during transition
   const [serviceId, setServiceId] = useState<string>(
     initialData ? extractId(initialData.service) : ''
   )
@@ -96,14 +109,23 @@ export function AppointmentForm({
           }
         }
       }
-      if (initialData.service) {
+      // Update services from initialData
+      const services = getInitialServices()
+      if (services.length > 0) {
+        setSelectedServices(services)
+        // Also set serviceId for backward compatibility
+        if (services.length > 0) {
+          setServiceId(services[0])
+        }
+      } else if (initialData.service) {
         const servId = extractId(initialData.service)
         if (servId) {
           setServiceId(servId)
+          setSelectedServices([servId])
         }
       }
     }
-  }, [initialData, extractId])
+  }, [initialData, extractId, getInitialServices])
 
   // Track previous department to detect actual changes
   const prevDepartmentRef = React.useRef<string | null>(selectedDepartment)
@@ -164,11 +186,17 @@ export function AppointmentForm({
       return
     }
     
-    // Only clear serviceId if we're creating new appointment and service doesn't match department
-    if (!initialData && serviceId && !filtered.some(s => extractId(s) === serviceId)) {
-      setServiceId('')
+    // Only clear services if we're creating new appointment and services don't match department
+    if (!initialData && selectedServices.length > 0) {
+      const validServices = selectedServices.filter((serviceId) =>
+        filtered.some((s) => extractId(s) === serviceId)
+      )
+      if (validServices.length !== selectedServices.length) {
+        setSelectedServices(validServices)
+        setServiceId(validServices.length > 0 ? validServices[0] : '')
+      }
     }
-  }, [selectedDepartment, services, initialData, serviceId, extractId])
+  }, [selectedDepartment, services, initialData, serviceId, selectedServices, extractId])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -203,8 +231,8 @@ export function AppointmentForm({
       }
     }
 
-    if (!serviceId || serviceId.trim() === '') {
-      errors.push('يرجى اختيار الخدمة')
+    if (selectedServices.length === 0) {
+      errors.push('يرجى اختيار خدمة واحدة على الأقل')
     }
 
     if (!type || type.trim() === '') {
@@ -231,7 +259,7 @@ export function AppointmentForm({
       const appointmentData = {
         client: clientId,
         doctor: finalUserId, // Use validated userId
-        service: serviceId,
+        services: selectedServices, // Send services array
         date,
         notes,
         type,
@@ -252,6 +280,7 @@ export function AppointmentForm({
         setClientId('')
         setUserId('')
         setSelectedDepartment(null)
+        setSelectedServices([])
         setServiceId('')
         setDate('')
         setNotes('')
@@ -395,24 +424,74 @@ export function AppointmentForm({
         ariaLabel='اختر المستخدم'
       />
 
-      {/* اختيار الخدمة */}
+      {/* اختيار الخدمات - متعدد */}
+      <div className='space-y-2'>
+        <label className='text-sm font-medium'>الخدمات *</label>
       <SearchableSelect
-        value={serviceId}
-        onValueChange={setServiceId}
-        options={serviceOptions}
-        placeholder={selectedDepartment ? 'اختر الخدمة' : 'اختر القسم أولاً'}
+          value=''
+          onValueChange={(value) => {
+            if (value && !selectedServices.includes(value)) {
+              setSelectedServices([...selectedServices, value])
+              if (selectedServices.length === 0) {
+                setServiceId(value) // Keep first service for backward compatibility
+              }
+            }
+          }}
+          options={serviceOptions.filter((opt) => !selectedServices.includes(opt.value))}
+          placeholder={selectedDepartment ? 'اختر خدمة لإضافتها' : 'اختر القسم أولاً'}
         searchPlaceholder='ابحث عن خدمة...'
         emptyMessage={
           !selectedDepartment
             ? 'اختر القسم أولاً'
             : filteredServices.length === 0
               ? 'لا توجد خدمات متاحة'
+                : selectedServices.length === filteredServices.length
+                  ? 'تم اختيار جميع الخدمات المتاحة'
               : 'لا توجد نتائج'
         }
-        required
-        disabled={!selectedDepartment}
-        ariaLabel='اختر الخدمة'
-      />
+          disabled={!selectedDepartment || selectedServices.length === filteredServices.length}
+          ariaLabel='اختر خدمة لإضافتها'
+        />
+        
+        {/* عرض الخدمات المختارة */}
+        {selectedServices.length > 0 && (
+          <div className='space-y-2 mt-2'>
+            {selectedServices.map((serviceId) => {
+              const service = filteredServices.find((s) => extractId(s) === serviceId) ||
+                services.find((s) => extractId(s) === serviceId)
+              return (
+                <div
+                  key={serviceId}
+                  className='flex items-center justify-between p-2 bg-gray-50 rounded-md border'
+                >
+                  <span className='text-sm'>{service?.name || 'خدمة غير معروفة'}</span>
+                  <Button
+                    type='button'
+                    variant='ghost'
+                    size='sm'
+                    onClick={() => {
+                      const newServices = selectedServices.filter((id) => id !== serviceId)
+                      setSelectedServices(newServices)
+                      if (newServices.length > 0) {
+                        setServiceId(newServices[0])
+                      } else {
+                        setServiceId('')
+                      }
+                    }}
+                    className='text-red-600 hover:text-red-700'
+                    aria-label={`إزالة ${service?.name || 'الخدمة'}`}
+                  >
+                    إزالة
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )}
+        {selectedServices.length === 0 && (
+          <p className='text-sm text-gray-500'>لم يتم اختيار أي خدمة</p>
+        )}
+      </div>
 
       {/* نوع الكشف */}
       <Select value={type} onValueChange={setType} required>

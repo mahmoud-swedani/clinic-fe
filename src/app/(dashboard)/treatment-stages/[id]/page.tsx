@@ -185,18 +185,20 @@ export default function TreatmentStageDetailPage() {
       {/* Edit Dialog */}
       {canEdit && (
         <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className='max-w-2xl' dir='rtl'>
+          <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
             <DialogHeader>
               <DialogTitle>تعديل المرحلة العلاجية</DialogTitle>
               <DialogDescription>قم بتعديل بيانات المرحلة العلاجية</DialogDescription>
             </DialogHeader>
-            <TreatmentStageEditForm
+            <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+              <TreatmentStageEditForm
               stage={stage}
               onSuccess={() => {
                 setIsEditDialogOpen(false)
               }}
               onCancel={() => setIsEditDialogOpen(false)}
-            />
+              />
+            </div>
           </DialogContent>
         </Dialog>
       )}

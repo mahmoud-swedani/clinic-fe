@@ -112,13 +112,14 @@ export function ClientImmunizations({ clientId }: ClientImmunizationsProps) {
                 إضافة تطعيم
               </Button>
             </DialogTrigger>
-            <DialogContent className='max-w-2xl' dir='rtl'>
+            <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
               <DialogHeader>
                 <DialogTitle>
                   {editingImmunization ? 'تعديل سجل التطعيم' : 'إضافة سجل تطعيم جديد'}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className='space-y-4'>
+              <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                <form onSubmit={handleSubmit} className='space-y-4'>
                 <div>
                   <Label htmlFor='vaccineName'>اسم اللقاح *</Label>
                   <Input
@@ -175,6 +176,7 @@ export function ClientImmunizations({ clientId }: ClientImmunizationsProps) {
                   </Button>
                 </div>
               </form>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

@@ -152,6 +152,17 @@ export interface ClientWithAppointments {
   appointments: Appointment[]
 }
 
+// AppointmentService types (junction table)
+export interface AppointmentService {
+  _id: string
+  id?: string
+  appointment: string | Appointment
+  service: string | Service
+  order?: number
+  createdAt?: string
+  updatedAt?: string
+}
+
 // Appointment types
 export interface Appointment {
   _id: string
@@ -162,7 +173,9 @@ export interface Appointment {
   type: string
   status: 'محجوز' | 'نشط' | 'تم' | 'ملغي'
   notes?: string
-  service: string | Service
+  service?: string | Service // Deprecated: kept for backward compatibility
+  services?: Service[] // New: array of services
+  appointmentServices?: AppointmentService[] // New: full appointment service entries
   departmentId: string | Department
   createdAt?: string
   updatedAt?: string
@@ -230,8 +243,10 @@ export interface Payment {
   client: string | Client
   appointment?: string | Appointment
   invoice: string | Invoice
+  treatmentStages?: string[] | TreatmentStage[] // Optional: specific treatment stages this payment is for
   amount: number
   method: 'نقدًا' | 'بطاقة' | 'تحويل بنكي' | 'أخرى'
+  notes?: string // Optional notes for the payment
   date: string
   receivedBy: string | User
   createdAt?: string
@@ -247,7 +262,8 @@ export interface TreatmentStage {
   description?: string
   date: string
   doctor?: string | User
-  appointment?: string | Appointment
+  appointment?: string | Appointment // Deprecated: kept for backward compatibility
+  appointmentService?: string | AppointmentService // New: link to AppointmentService
   cost?: number
   isCompleted: boolean
   createdAt?: string
@@ -414,7 +430,8 @@ export interface CreateAppointmentRequest {
   date: string
   type: string
   notes?: string
-  service: string
+  service?: string // Deprecated: kept for backward compatibility
+  services?: string[] // New: array of service IDs
   departmentId: string
 }
 

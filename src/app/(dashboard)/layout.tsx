@@ -25,7 +25,7 @@ function DashboardContent({ children }: { children: ReactNode }) {
       <Navbar />
 
       <div className='flex flex-1 overflow-hidden'>
-        {/* Sidebar - visible on large screens (≥1024px), accessible via navbar menu on mobile */}
+        {/* Sidebar - visible on large screens (>=1024px), accessible via navbar menu on mobile */}
         <aside className='hidden lg:flex lg:w-64 lg:flex-shrink-0 border-r bg-gray-100 overflow-y-auto'>
           <Sidebar />
         </aside>

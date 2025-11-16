@@ -2,33 +2,23 @@
 
 import { useState, Suspense } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogTrigger,
-} from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { useInvoices } from '@/hooks/useInvoices'
 import { usePagination } from '@/hooks/usePagination'
 import { Pagination } from '@/components/ui/Pagination'
-import { AddPayForm } from '@/components/payments/add-pay-form'
 import { useUserPermissions } from '@/hooks/usePermissions'
 import Link from 'next/link'
-import { Plus } from 'lucide-react'
+import { Plus, Eye } from 'lucide-react'
 import { Invoice, PaginatedResponse } from '@/types/api'
 import { Skeleton } from '@/components/ui/skeleton'
 
 function InvoicesContent() {
   const [searchTerm, setSearchTerm] = useState('')
-  const [openDialogId, setOpenDialogId] = useState<string | null>(null)
   const { page, limit, goToPage, changeLimit } = usePagination(10)
-  const { data, isLoading, refetch } = useInvoices()
-  const { canAddPayments, canManageInvoices } = useUserPermissions()
+  const { data, isLoading } = useInvoices()
+  const { canManageInvoices } = useUserPermissions()
 
   const typedData = data as PaginatedResponse<Invoice> | undefined
   const invoices = typedData?.data || []
@@ -105,7 +95,6 @@ function InvoicesContent() {
                       typeof invoice.client === 'object' && invoice.client !== null
                         ? invoice.client.fullName
                         : 'غير معروف'
-                    const isFullyPaid = invoice.status === 'مدفوعة بالكامل'
 
                     return (
                       <tr
@@ -157,51 +146,16 @@ function InvoicesContent() {
                           </Badge>
                         </td>
                         <td className='px-4 py-3'>
-                          {!isFullyPaid && canAddPayments && (
-                            <Dialog
-                              open={openDialogId === invoice._id}
-                              onOpenChange={(isOpen) =>
-                                setOpenDialogId(isOpen ? invoice._id : null)
-                              }
+                          <Link href={`/invoices/${invoice._id}`}>
+                            <Button
+                              size='sm'
+                              variant='outline'
+                              className='flex items-center gap-2'
                             >
-                              <DialogTrigger asChild>
-                                <Button
-                                  size='sm'
-                                  variant='outline'
-                                  onClick={() => setOpenDialogId(invoice._id)}
-                                >
-                                  إضافة دفعة
-                                </Button>
-                              </DialogTrigger>
-                              <DialogContent>
-                                <DialogHeader>
-                                  <DialogTitle>إضافة دفعة</DialogTitle>
-                                  <DialogDescription>
-                                    قم بإضافة دفعة جديدة للفاتورة
-                                  </DialogDescription>
-                                </DialogHeader>
-                                <AddPayForm
-                                  invoiceId={invoice._id}
-                                  clientId={
-                                    typeof invoice.client === 'object' &&
-                                    invoice.client !== null
-                                      ? invoice.client._id
-                                      : invoice.client
-                                  }
-                                  appointmentId={
-                                    typeof invoice.appointment === 'object' &&
-                                    invoice.appointment !== null
-                                      ? invoice.appointment._id
-                                      : invoice.appointment
-                                  }
-                                  payments={[]}
-                                  remainingAmount={invoice.remainingAmount}
-                                  refetchInvoices={refetch}
-                                  onClose={() => setOpenDialogId(null)}
-                                />
-                              </DialogContent>
-                            </Dialog>
-                          )}
+                              <Eye className='w-4 h-4' />
+                              عرض التفاصيل
+                            </Button>
+                          </Link>
                         </td>
                       </tr>
                     )

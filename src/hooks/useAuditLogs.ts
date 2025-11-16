@@ -44,8 +44,8 @@ export function useAuditLogs(
     staleTime: 2 * 60 * 1000, // 2 minutes
     placeholderData: keepPreviousData,
     retry: (failureCount, error: { response?: { status?: number } }) => {
-      // Don't retry on 403 (Forbidden) errors
-      if (error?.response?.status === 403) {
+      // Don't retry on 403 (Forbidden) or 429 (rate limit) errors
+      if (error?.response?.status === 403 || error?.response?.status === 429) {
         return false
       }
       return failureCount < 2
@@ -84,12 +84,14 @@ export function useEntityAuditHistory(
     },
     enabled: !!entityType && !!entityId,
     staleTime: 2 * 60 * 1000, // 2 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus to reduce rate limiting
+    refetchOnReconnect: false, // Don't refetch on reconnect to reduce rate limiting
     retry: (failureCount, error: { response?: { status?: number } }) => {
-      // Don't retry on 403 (Forbidden) errors
-      if (error?.response?.status === 403) {
+      // Don't retry on 403 (Forbidden) or 429 (rate limit) errors
+      if (error?.response?.status === 403 || error?.response?.status === 429) {
         return false
       }
-      return failureCount < 2
+      return failureCount < 1 // Reduce retries
     },
     throwOnError: false, // Don't throw errors to prevent breaking the UI
   })

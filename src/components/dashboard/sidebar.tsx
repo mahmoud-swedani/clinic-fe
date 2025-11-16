@@ -21,6 +21,7 @@ import {
   UserCog,
   Key,
   Loader2,
+  CalendarCheck,
 } from 'lucide-react'
 
 // 🔹 استيراد هوك المستخدم الحالي
@@ -62,6 +63,12 @@ const navItems = [
     name: 'المواعيد', 
     href: '/appointments', 
     icon: <Calendar size={20} />,
+    permission: 'appointments.view',
+  },
+  {
+    name: 'إدارة المواعيد',
+    href: '/appointment-management',
+    icon: <CalendarCheck size={20} />,
     permission: 'appointments.view',
   },
   {

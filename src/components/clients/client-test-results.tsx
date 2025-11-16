@@ -114,13 +114,14 @@ export function ClientTestResults({ clientId }: ClientTestResultsProps) {
                 إضافة نتيجة فحص
               </Button>
             </DialogTrigger>
-            <DialogContent className='max-w-2xl' dir='rtl'>
+            <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
               <DialogHeader>
                 <DialogTitle>
                   {editingTestResult ? 'تعديل نتيجة الفحص' : 'إضافة نتيجة فحص جديدة'}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className='space-y-4'>
+              <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                <form onSubmit={handleSubmit} className='space-y-4'>
                 <div>
                   <Label htmlFor='testName'>اسم الفحص *</Label>
                   <Input
@@ -179,6 +180,7 @@ export function ClientTestResults({ clientId }: ClientTestResultsProps) {
                   </Button>
                 </div>
               </form>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

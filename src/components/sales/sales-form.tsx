@@ -354,15 +354,16 @@ export default function SalesForm() {
       
       {/* Confirmation Dialog */}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
-        <DialogContent dir='rtl'>
+        <DialogContent className='max-w-[95vw] w-full sm:max-w-md' dir='rtl'>
           <DialogHeader>
             <DialogTitle>تأكيد حفظ عملية البيع</DialogTitle>
             <DialogDescription>
               هل أنت متأكد من حفظ عملية البيع التالية؟
             </DialogDescription>
           </DialogHeader>
-          {salePayload && (
-            <div className='space-y-2 text-sm'>
+          <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+            {salePayload && (
+              <div className='space-y-2 text-sm'>
               <p>
                 <strong>المبلغ الإجمالي:</strong> {salePayload.totalAmount.toLocaleString()} ل.س
               </p>
@@ -383,8 +384,9 @@ export default function SalesForm() {
               <p>
                 <strong>عدد المنتجات:</strong> {salePayload.items.length}
               </p>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
           <DialogFooter>
             <Button variant='outline' onClick={() => setConfirmOpen(false)}>
               إلغاء

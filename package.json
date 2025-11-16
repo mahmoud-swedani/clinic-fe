@@ -6,6 +6,8 @@
     "dev": "next dev",
     "dev:turbo": "next dev --turbo",
     "build": "next build",
+    "build:check": "tsc --noEmit && next build",
+    "type-check": "tsc --noEmit",
     "start": "next start",
     "lint": "next lint"
   },

@@ -119,13 +119,14 @@ export function ClientMedications({ clientId }: ClientMedicationsProps) {
                 إضافة دواء
               </Button>
             </DialogTrigger>
-            <DialogContent className='max-w-2xl' dir='rtl'>
+            <DialogContent className='max-w-[95vw] w-full sm:max-w-2xl' dir='rtl'>
               <DialogHeader>
                 <DialogTitle>
                   {editingMedication ? 'تعديل سجل الدواء' : 'إضافة سجل دواء جديد'}
                 </DialogTitle>
               </DialogHeader>
-              <form onSubmit={handleSubmit} className='space-y-4'>
+              <div className='overflow-y-auto max-h-[calc(90vh-120px)]'>
+                <form onSubmit={handleSubmit} className='space-y-4'>
                 <div>
                   <Label htmlFor='medicationName'>اسم الدواء *</Label>
                   <Input
@@ -200,6 +201,7 @@ export function ClientMedications({ clientId }: ClientMedicationsProps) {
                   </Button>
                 </div>
               </form>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

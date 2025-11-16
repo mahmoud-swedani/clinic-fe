@@ -177,6 +177,8 @@ export function useUserPermissions() {
       permissions.includes('appointments.view-activities'),
     canViewTreatmentStageActivities:
       permissions.includes('treatment-stages.view-activities'),
+    canViewInvoiceActivities:
+      permissions.includes('invoices.view-activities'),
     canManageProducts:
       permissions.includes('products.create') ||
       permissions.includes('products.edit'),

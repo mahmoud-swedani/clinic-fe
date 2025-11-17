@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, useCallback } from 'react'
+import { useState, useMemo, useEffect, useCallback, useRef } from 'react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import axios from '@/lib/axios'
@@ -25,6 +25,7 @@ export function AddPayForm({
   appointmentId,
   refetchInvoices,
   onClose,
+  onPaymentSuccess,
   payments = [],
   remainingAmount = 0,
   treatmentStages = [],
@@ -37,6 +38,7 @@ export function AddPayForm({
   appointmentId?: string
   refetchInvoices?: () => void
   onClose?: () => void
+  onPaymentSuccess?: () => void
   payments?: Payment[] // Full payment objects with treatmentStages
   remainingAmount?: number
   treatmentStages?: TreatmentStage[]
@@ -52,11 +54,15 @@ export function AddPayForm({
   const [loading, setLoading] = useState(false)
   const queryClient = useQueryClient()
 
+  const prevInitialStageRef = useRef<string | null>(initialSelectedStage || null)
+
   // Update selected stage when initialSelectedStage changes (important for pre-selected stage)
   useEffect(() => {
-    if (initialSelectedStage) {
+    const prevInitialStage = prevInitialStageRef.current
+
+    if (initialSelectedStage && initialSelectedStage !== prevInitialStage) {
       setSelectedStage(initialSelectedStage)
-      
+
       // Auto-select the service that contains this stage
       if (appointmentServices.length > 0 && Object.keys(stagesByService).length > 0) {
         const serviceForStage = appointmentServices.find((as) => {
@@ -67,12 +73,14 @@ export function AddPayForm({
           setSelectedServiceId(serviceForStage._id)
         }
       }
-    } else if (!initialSelectedStage && selectedStage) {
-      // Clear selection if initialSelectedStage is cleared
+    } else if (!initialSelectedStage && prevInitialStage) {
+      // Clear selection only when prop transitions from value to null
       setSelectedStage(null)
       setSelectedServiceId(null)
     }
-  }, [initialSelectedStage, appointmentServices, stagesByService, selectedStage])
+
+    prevInitialStageRef.current = initialSelectedStage || null
+  }, [initialSelectedStage, appointmentServices, stagesByService])
 
   // Helper function to calculate paid amount for a specific stage
   const calculateStagePaid = useCallback((stageId: string): number => {
@@ -277,20 +285,17 @@ export function AddPayForm({
       setSelectedStage(null)
       setSelectedServiceId(null)
 
-      // Wait a moment for backend to process
-      await new Promise(resolve => setTimeout(resolve, 300))
-      
-      // Call refetch callback if provided - this will refetch invoice and payments
+      if (onPaymentSuccess) onPaymentSuccess()
+      if (onClose) onClose()
+
+      // Fire-and-forget refetches so UI can close immediately
       if (refetchInvoices) {
-        await refetchInvoices()
+        refetchInvoices()
       }
       
-      // Also explicitly refetch payments to ensure UI updates
       queryClient.refetchQueries({
         queryKey: queryKeys.payments.byInvoice(invoiceId),
       })
-      
-      if (onClose) onClose()
     } catch (error) {
       console.error(error)
       toast.error('فشل في إضافة الدفعة. تحقق من البيانات.')
@@ -473,24 +478,23 @@ export function AddPayForm({
                       if (target.closest('[role="combobox"]') || target.closest('[data-slot="select-trigger"]') || target.closest('[data-slot="select-content"]')) {
                         return
                       }
-                      // Programmatically click the RadioGroupItem button to trigger Radix UI's internal handler
-                      // Use setTimeout to ensure DOM is ready
-                      setTimeout(() => {
-                        const buttonById = document.getElementById(radioId) as HTMLButtonElement
-                        if (buttonById) {
-                          buttonById.click()
-                        }
-                      }, 0)
-                    }}
-                    role='button'
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        const buttonById = document.getElementById(radioId) as HTMLButtonElement
-                        if (buttonById) {
-                          buttonById.click()
-                        }
+                      // Check if click is already on the RadioGroupItem button - if so, let it handle naturally
+                      if (target.closest('button[role="radio"]')) {
+                        return
+                      }
+                      // Find and click the RadioGroupItem button to trigger Radix UI's handler
+                      const button = document.getElementById(radioId) as HTMLButtonElement
+                      if (button) {
+                        // Create and dispatch a click event on the button
+                        const clickEvent = new MouseEvent('click', {
+                          bubbles: true,
+                          cancelable: true,
+                          view: window
+                        })
+                        button.dispatchEvent(clickEvent)
+                      } else {
+                        // Fallback: directly call handleStageSelect
+                        handleStageSelect(String(stage._id))
                       }
                     }}
                   >
@@ -506,10 +510,17 @@ export function AddPayForm({
                         if (target.closest('[role="combobox"]') || target.closest('[data-slot="select-trigger"]')) {
                           return
                         }
-                        // Programmatically click the RadioGroupItem button
-                        const buttonById = document.getElementById(radioId) as HTMLButtonElement
-                        if (buttonById) {
-                          buttonById.click()
+                        // Find and click the RadioGroupItem button
+                        const button = document.getElementById(radioId) as HTMLButtonElement
+                        if (button) {
+                          const clickEvent = new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window
+                          })
+                          button.dispatchEvent(clickEvent)
+                        } else {
+                          handleStageSelect(String(stage._id))
                         }
                       }}
                     >
@@ -618,24 +629,23 @@ export function AddPayForm({
                       if (target.closest('[role="combobox"]') || target.closest('[data-slot="select-trigger"]') || target.closest('[data-slot="select-content"]')) {
                         return
                       }
-                      // Programmatically click the RadioGroupItem button to trigger Radix UI's internal handler
-                      // Use setTimeout to ensure DOM is ready
-                      setTimeout(() => {
-                        const buttonById = document.getElementById(radioId) as HTMLButtonElement
-                        if (buttonById) {
-                          buttonById.click()
-                        }
-                      }, 0)
-                    }}
-                    role='button'
-                    tabIndex={0}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault()
-                        const buttonById = document.getElementById(radioId) as HTMLButtonElement
-                        if (buttonById) {
-                          buttonById.click()
-                        }
+                      // Check if click is already on the RadioGroupItem button - if so, let it handle naturally
+                      if (target.closest('button[role="radio"]')) {
+                        return
+                      }
+                      // Find and click the RadioGroupItem button to trigger Radix UI's handler
+                      const button = document.getElementById(radioId) as HTMLButtonElement
+                      if (button) {
+                        // Create and dispatch a click event on the button
+                        const clickEvent = new MouseEvent('click', {
+                          bubbles: true,
+                          cancelable: true,
+                          view: window
+                        })
+                        button.dispatchEvent(clickEvent)
+                      } else {
+                        // Fallback: directly call handleStageSelect
+                        handleStageSelect(String(stage._id))
                       }
                     }}
                   >
@@ -651,10 +661,17 @@ export function AddPayForm({
                         if (target.closest('[role="combobox"]') || target.closest('[data-slot="select-trigger"]')) {
                           return
                         }
-                        // Programmatically click the RadioGroupItem button
-                        const buttonById = document.getElementById(radioId) as HTMLButtonElement
-                        if (buttonById) {
-                          buttonById.click()
+                        // Find and click the RadioGroupItem button
+                        const button = document.getElementById(radioId) as HTMLButtonElement
+                        if (button) {
+                          const clickEvent = new MouseEvent('click', {
+                            bubbles: true,
+                            cancelable: true,
+                            view: window
+                          })
+                          button.dispatchEvent(clickEvent)
+                        } else {
+                          handleStageSelect(String(stage._id))
                         }
                       }}
                     >

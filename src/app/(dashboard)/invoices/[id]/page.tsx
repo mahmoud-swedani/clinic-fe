@@ -10,6 +10,7 @@ import { Payment, TreatmentStage, AuditLog, AppointmentService, Invoice } from '
 import { useUserPermissions } from '@/hooks/usePermissions'
 import { queryKeys } from '@/lib/queryKeys'
 import { useEntityAuditHistory } from '@/hooks/useAuditLogs'
+import { isGloballyRateLimited, setGlobalRateLimited, cleanupExpiredRateLimit } from '@/lib/rateLimit'
 import {
   Dialog,
   DialogContent,
@@ -19,7 +20,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { AddPayForm } from '@/components/payments/add-pay-form'
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useQueryClient, useQuery } from '@tanstack/react-query'
 import axios from '@/lib/axios'
 import { ApiResponse } from '@/types/api'
@@ -46,9 +47,21 @@ export default function InvoiceDetailsPage() {
   const [hasCheckedRecalculation, setHasCheckedRecalculation] = useState(false)
   const [openPaymentsDialog, setOpenPaymentsDialog] = useState(false)
   const [selectedStageForPayments, setSelectedStageForPayments] = useState<TreatmentStage | null>(null)
+  const [activityTab, setActivityTab] = useState<'payments' | 'stages' | 'invoice'>('payments')
+  const paymentActivityCache = useRef<AuditLog[]>([])
+  const [isPaymentRefetching, setIsPaymentRefetching] = useState(false)
+  const [manualPaymentRefreshKey, setManualPaymentRefreshKey] = useState(0)
+  const [paymentActivityError, setPaymentActivityError] = useState<string | null>(null)
   const queryClient = useQueryClient()
   const { canAddPayments, hasPermission, canViewInvoiceActivities } = useUserPermissions()
   const canEditPayments = hasPermission('payments.edit') || hasPermission('payments.update')
+
+  useEffect(() => {
+    const cleanupInterval = setInterval(cleanupExpiredRateLimit, 1000)
+    return () => clearInterval(cleanupInterval)
+  }, [])
+
+  const isRateLimited = isGloballyRateLimited()
 
   // جلب تفاصيل الفاتورة
   const {
@@ -71,12 +84,23 @@ export default function InvoiceDetailsPage() {
     data: invoiceActivities,
     isLoading: loadingActivities,
     error: errorActivities,
-  } = useEntityAuditHistory('Invoice', invoiceId, 100)
+    refetch: refetchInvoiceActivities,
+  } = useEntityAuditHistory('Invoice', invoiceId, 100, activityTab === 'invoice')
 
   // جلب سجلات المدفوعات
   const paymentIds = useMemo(() => {
     if (!payments || !Array.isArray(payments)) return []
     return payments.map((p: Payment) => String(p._id))
+  }, [payments])
+
+  const paymentMap = useMemo(() => {
+    const map = new Map<string, Payment>()
+    if (Array.isArray(payments)) {
+      payments.forEach((payment) => {
+        map.set(String(payment._id), payment)
+      })
+    }
+    return map
   }, [payments])
 
   // جلب سجلات المراحل
@@ -92,7 +116,20 @@ export default function InvoiceDetailsPage() {
 
   // Helper function to get audit logs for multiple entities
   const getAllPaymentActivities = useCallback(async () => {
-    if (!paymentIds.length) return []
+    if (!paymentIds.length) {
+      if (process.env.NODE_ENV === 'development') {
+        console.debug('Skipping payment activity fetch: no payment IDs')
+      }
+      return []
+    }
+
+    if (isGloballyRateLimited() && paymentActivityCache.current.length > 0) {
+      if (process.env.NODE_ENV === 'development') {
+        console.warn('Rate limited while fetching payment activities, using cached data')
+      }
+      return paymentActivityCache.current
+    }
+
     const allActivities: AuditLog[] = []
     
     // Process requests with delay to avoid rate limiting
@@ -116,9 +153,9 @@ export default function InvoiceDetailsPage() {
         // Log error but continue with other requests
         const axiosError = error as { response?: { status?: number }; message?: string }
         if (axiosError.response?.status === 429) {
-          console.warn(`Rate limit hit for payment ${paymentId}, skipping...`)
-          // Wait longer before next request if rate limited
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          console.warn(`Rate limit hit for payment ${paymentId}, backing off...`)
+          setGlobalRateLimited()
+          break
         } else if (axiosError.response?.status === 403) {
           // Permission denied - silently skip (user may not have permission to view audit logs)
           // Don't log as error, just continue
@@ -129,15 +166,23 @@ export default function InvoiceDetailsPage() {
       }
     }
     
+    if (process.env.NODE_ENV === 'development') {
+      console.debug('Fetched payment audit logs', {
+        invoiceId,
+        paymentIdsCount: paymentIds.length,
+        activityCount: allActivities.length,
+      })
+    }
+
     return allActivities.sort((a, b) => {
       const dateA = a.performedAt ? new Date(a.performedAt).getTime() : 0
       const dateB = b.performedAt ? new Date(b.performedAt).getTime() : 0
       return dateB - dateA
     })
-  }, [paymentIds])
+  }, [paymentIds, invoiceId])
 
   const getAllStageActivities = useCallback(async () => {
-    if (!stageIds.length) return []
+    if (!stageIds.length || isGloballyRateLimited()) return []
     const allActivities: AuditLog[] = []
     
     // Process requests with delay to avoid rate limiting
@@ -161,9 +206,9 @@ export default function InvoiceDetailsPage() {
         // Log error but continue with other requests
         const axiosError = error as { response?: { status?: number }; message?: string }
         if (axiosError.response?.status === 429) {
-          console.warn(`Rate limit hit for stage ${stageId}, skipping...`)
-          // Wait longer before next request if rate limited
-          await new Promise(resolve => setTimeout(resolve, 1000))
+          console.warn(`Rate limit hit for stage ${stageId}, backing off...`)
+          setGlobalRateLimited()
+          break
         } else if (axiosError.response?.status === 403) {
           // Permission denied - silently skip (user may not have permission to view audit logs)
           // Don't log as error, just continue
@@ -181,11 +226,13 @@ export default function InvoiceDetailsPage() {
     })
   }, [stageIds])
 
-  const { data: paymentActivities = [], isLoading: loadingPaymentActivities } = useQuery({
-    queryKey: ['payment-activities', paymentIds],
+  const { data: paymentActivities = [], isFetching: isFetchingPaymentActivities, error: paymentActivitiesQueryError } = useQuery({
+    queryKey: ['payment-activities', paymentIds, manualPaymentRefreshKey],
     queryFn: getAllPaymentActivities,
-    enabled: paymentIds.length > 0,
+    enabled: paymentIds.length > 0 && activityTab === 'payments' && !isRateLimited,
     staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: (failureCount, error: unknown) => {
       // Don't retry on 429 (rate limit) or 403 (forbidden) errors
       const axiosError = error as { response?: { status?: number } } | null
@@ -196,11 +243,44 @@ export default function InvoiceDetailsPage() {
     },
   })
 
+  // Handle success: clear error when data is successfully fetched
+  useEffect(() => {
+    if (paymentActivities && paymentActivities.length >= 0 && !paymentActivitiesQueryError) {
+      setPaymentActivityError(null)
+    }
+  }, [paymentActivities, paymentActivitiesQueryError])
+
+  // Handle error: set error message when query fails
+  useEffect(() => {
+    if (paymentActivitiesQueryError) {
+      const axiosError = paymentActivitiesQueryError as { message?: string }
+      setPaymentActivityError(axiosError?.message || 'تعذر تحميل سجل الدفعات')
+    }
+  }, [paymentActivitiesQueryError])
+
+  useEffect(() => {
+    if (paymentActivities && paymentActivities.length > 0) {
+      paymentActivityCache.current = paymentActivities
+    }
+  }, [paymentActivities])
+
+  useEffect(() => {
+    setIsPaymentRefetching(isFetchingPaymentActivities)
+  }, [isFetchingPaymentActivities])
+
+  const handleManualPaymentRefresh = useCallback(() => {
+    setPaymentActivityError(null)
+    setManualPaymentRefreshKey((prev) => prev + 1)
+    queryClient.invalidateQueries({ queryKey: ['payment-activities'] })
+  }, [queryClient])
+
   const { data: stageActivities = [], isLoading: loadingStageActivities } = useQuery({
     queryKey: ['stage-activities', stageIds],
     queryFn: getAllStageActivities,
-    enabled: stageIds.length > 0,
+    enabled: stageIds.length > 0 && activityTab === 'stages' && !isRateLimited,
     staleTime: 2 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
     retry: (failureCount, error: unknown) => {
       // Don't retry on 429 (rate limit) or 403 (forbidden) errors
       const axiosError = error as { response?: { status?: number } } | null
@@ -573,8 +653,10 @@ export default function InvoiceDetailsPage() {
             onClick={async () => {
               try {
                 await axios.post(`/payments/invoice/${invoiceId}/recalculate`)
-                await refetchInvoice()
-                await refetchPayments()
+        await Promise.all([
+          refetchInvoice(),
+          refetchPayments(),
+        ])
                 toast.success('تم إعادة حساب المبالغ بنجاح')
               } catch (error) {
                 console.error(error)
@@ -645,25 +727,38 @@ export default function InvoiceDetailsPage() {
                     stagesByService={stagesByService}
                     initialSelectedStage={preSelectedStage}
                     refetchInvoices={async () => {
-                      // Invalidate all related queries
                       queryClient.invalidateQueries({
                         queryKey: queryKeys.invoices.detail(invoiceId),
                       })
                       queryClient.invalidateQueries({
                         queryKey: queryKeys.payments.byInvoice(invoiceId),
                       })
-                      queryClient.invalidateQueries({
-                        queryKey: queryKeys.auditLogs.entity('Invoice', invoiceId),
-                      })
                       
-                      // Refetch all data
                       await Promise.all([
                         refetchInvoice(),
                         refetchPayments(),
                       ])
                       
-                      // Reset recalculation check so it can check again if needed
                       setHasCheckedRecalculation(false)
+                    }}
+                    onPaymentSuccess={() => {
+                      queryClient.invalidateQueries({
+                        queryKey: ['payment-activities', paymentIds],
+                      })
+                      queryClient.invalidateQueries({
+                        queryKey: queryKeys.auditLogs.entity('Invoice', invoiceId),
+                      })
+
+                      Promise.allSettled([
+                        refetchPayments(),
+                        refetchInvoice(),
+                        activityTab === 'invoice' ? refetchInvoiceActivities() : Promise.resolve(),
+                        getAllPaymentActivities().then((activities) => {
+                          if (activities && activities.length > 0) {
+                            paymentActivityCache.current = activities
+                          }
+                        }),
+                      ])
                     }}
                     onClose={() => {
                       setOpenDialog(false)
@@ -907,7 +1002,11 @@ export default function InvoiceDetailsPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-          <Tabs defaultValue='payments' className='w-full'>
+          <Tabs
+            value={activityTab}
+            onValueChange={(value) => setActivityTab(value as 'payments' | 'stages' | 'invoice')}
+            className='w-full'
+          >
             <TabsList className='grid w-full grid-cols-3'>
               <TabsTrigger value='payments' className='flex items-center gap-2'>
                 <CreditCard className='w-4 h-4' />
@@ -925,18 +1024,41 @@ export default function InvoiceDetailsPage() {
 
             {/* تبويب الدفعات */}
             <TabsContent value='payments' className='mt-6'>
-              {loadingPayments || loadingPaymentActivities ? (
+              <div className='flex items-center justify-between mb-3'>
+                <span className='text-sm font-medium text-gray-700'>سجل الدفعات</span>
+                {paymentIds.length > 0 && (
+                  <Button
+                    variant='outline'
+                    size='sm'
+                    onClick={handleManualPaymentRefresh}
+                    disabled={isPaymentRefetching && !paymentActivityCache.current.length}
+                  >
+                    تحديث
+                  </Button>
+                )}
+              </div>
+              {paymentActivityError && (
+                <div className='text-xs text-red-600 mb-2'>
+                  {paymentActivityError}
+                </div>
+              )}
+              {loadingPayments && !paymentActivityCache.current.length ? (
                 <div className='text-center py-4'>جارٍ تحميل البيانات...</div>
-              ) : errorPayments ? (
+              ) : errorPayments && !paymentActivityCache.current.length ? (
                 <div className='text-center text-red-600 py-4'>
                   حدث خطأ أثناء جلب الدفعات
                 </div>
-              ) : !payments || (Array.isArray(payments) && payments.length === 0) ? (
+              ) : paymentActivityCache.current.length === 0 ? (
                 <div className='text-center text-gray-500 py-8'>
                   لا توجد دفعات مسجلة بعد
                 </div>
               ) : (
                 <div className='space-y-4'>
+                  {isPaymentRefetching && (
+                    <div className='text-center text-xs text-gray-500'>
+                      جارٍ تحديث سجل الدفعات...
+                    </div>
+                  )}
                   <div className='overflow-x-auto'>
                     <table className='w-full text-sm text-right'>
                       <thead>
@@ -950,197 +1072,202 @@ export default function InvoiceDetailsPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {payments.map((payment: Payment) => {
-                          // Find all audit logs for this payment
-                          const paymentAuditLogs = Array.isArray(paymentActivities)
-                            ? paymentActivities.filter(
-                                (log: AuditLog) =>
-                                  (log.entityType as string) === 'Payment' &&
-                                  String(log.entityId) === String(payment._id)
-                              )
-                            : []
+                        {(paymentActivities && paymentActivities.length > 0 ? paymentActivities : paymentActivityCache.current)
+                          .filter((log: AuditLog) => (log.entityType as string) === 'Payment')
+                          .sort((a, b) => {
+                            const dateA = a.performedAt ? new Date(a.performedAt).getTime() : 0
+                            const dateB = b.performedAt ? new Date(b.performedAt).getTime() : 0
+                            return dateB - dateA
+                          })
+                          .map((log) => {
+                            const payment = paymentMap.get(String(log.entityId))
+                            const changes =
+                              (log.changes as {
+                                reason?: string
+                                before?: Record<string, unknown>
+                                after?: Record<string, unknown>
+                              }) || {}
+                            const after = changes.after || {}
+                            const before = changes.before || {}
 
-                          // Sort by date (newest first) and find the latest update log or the latest log
-                          const paymentAuditLog = paymentAuditLogs.length > 0
-                            ? paymentAuditLogs
-                                .sort((a, b) => {
-                                  const dateA = a.performedAt ? new Date(a.performedAt).getTime() : 0
-                                  const dateB = b.performedAt ? new Date(b.performedAt).getTime() : 0
-                                  return dateB - dateA
-                                })
-                                .find(log => log.action === 'update') || paymentAuditLogs[0]
-                            : null
+                            const amount =
+                              typeof after.amount === 'number'
+                                ? after.amount
+                                : typeof before.amount === 'number'
+                                ? before.amount
+                                : payment?.amount || 0
 
-                          // Determine action type
-                          let actionType: 'create' | 'update' | 'delete' = 'create'
-                          let actionIcon = <Plus className='w-4 h-4' />
-                          let actionLabel = 'إضافة'
-                          let actionColor = 'text-green-600 bg-green-50'
-                          let reason = ''
+                            const method =
+                              typeof after.method === 'string'
+                                ? after.method
+                                : typeof before.method === 'string'
+                                ? before.method
+                                : payment?.method || 'غير محدد'
 
-                          if (paymentAuditLog) {
-                            actionType = paymentAuditLog.action as 'create' | 'update' | 'delete'
+                            const actionType = log.action as 'create' | 'update' | 'delete'
+                            let actionIcon = <Plus className='w-4 h-4' />
+                            let actionLabel = 'إضافة'
+                            let actionColor = 'text-green-600 bg-green-50'
+
                             if (actionType === 'update') {
                               actionIcon = <Edit className='w-4 h-4' />
                               actionLabel = 'تعديل'
                               actionColor = 'text-blue-600 bg-blue-50'
-                              // Extract reason from changes
-                              const changes = paymentAuditLog.changes as { reason?: string; before?: unknown; after?: unknown } | undefined
-                              if (changes?.reason) {
-                                reason = String(changes.reason)
-                              } else if (changes?.after && changes?.before) {
-                                const after = changes.after as Record<string, unknown>
-                                const before = changes.before as Record<string, unknown>
-                                if (after.amount !== before.amount) {
-                                  reason = `تغيير المبلغ من ${Number(before.amount || 0).toLocaleString()} إلى ${Number(after.amount || 0).toLocaleString()} ل.س`
-                                } else if (after.method !== before.method) {
-                                  reason = `تغيير طريقة الدفع من ${String(before.method)} إلى ${String(after.method)}`
-                                } else {
-                                  reason = 'تعديل بيانات الدفعة'
-                                }
-                              }
                             } else if (actionType === 'delete') {
                               actionIcon = <Trash2 className='w-4 h-4' />
                               actionLabel = 'حذف'
                               actionColor = 'text-red-600 bg-red-50'
                             }
-                          }
-                          const receivedByName =
-                            typeof payment.receivedBy === 'object' &&
-                            payment.receivedBy !== null
-                              ? payment.receivedBy.name
-                              : 'غير معروف'
 
-                          // Find treatment stage and service for this payment
-                          let stageInfo = 'لجميع المراحل (دفعة قديمة)'
-                    if (payment.treatmentStages && Array.isArray(payment.treatmentStages) && payment.treatmentStages.length > 0) {
-                      // Get the first treatment stage (payments are now single-stage)
-                      const paymentStageId = typeof payment.treatmentStages[0] === 'object' && payment.treatmentStages[0] !== null
-                        ? (payment.treatmentStages[0] as TreatmentStage)._id
-                        : String(payment.treatmentStages[0])
-                      
-                      // Normalize the ID for comparison
-                      const normalizedPaymentStageId = String(paymentStageId).trim().toLowerCase()
-                      
-                      // Find which service this stage belongs to by checking stagesByService
-                      let foundStage: TreatmentStage | null = null
-                      let foundService: AppointmentService | null = null
-                      
-                      for (const appointmentService of appointmentServices) {
-                        const serviceStages = stagesByService[appointmentService._id] || []
-                        const matchingStage = serviceStages.find((s) => {
-                          const stageId = String(s._id).trim().toLowerCase()
-                          return stageId === normalizedPaymentStageId
-                        })
-                        
-                        if (matchingStage) {
-                          foundStage = matchingStage
-                          foundService = appointmentService
-                          break
-                        }
-                      }
-                      
-                      // If not found in stagesByService, try to find in invoice.treatmentStages
-                      if (!foundStage && Array.isArray(invoice.treatmentStages)) {
-                        const stageObj = invoice.treatmentStages.find((s) => {
-                          const sId = typeof s === 'object' && s !== null 
-                            ? String((s as TreatmentStage)._id).trim().toLowerCase()
-                            : String(s).trim().toLowerCase()
-                          return sId === normalizedPaymentStageId
-                        })
-                        
-                        if (stageObj && typeof stageObj === 'object') {
-                          foundStage = stageObj as TreatmentStage
-                          
-                          // Try to find the service for this stage
-                          foundService = appointmentServices.find((as) => {
-                            const serviceStages = stagesByService[as._id] || []
-                            return serviceStages.some((s) => {
-                              const stageId = String(s._id).trim().toLowerCase()
-                              return stageId === normalizedPaymentStageId
-                            })
-                          }) || null
-                        }
-                      }
-                      
-                      // Build the display string
-                      if (foundStage) {
-                        if (foundService) {
-                          const service = typeof foundService.service === 'object'
-                            ? foundService.service
-                            : null
-                          stageInfo = `${service?.name || 'خدمة غير معروفة'} - ${foundStage.title}`
-                        } else {
-                          stageInfo = foundStage.title
-                        }
-                      } else {
-                        // Debug: Log if stage not found
-                        if (process.env.NODE_ENV === 'development') {
-                          console.warn('Payment stage not found:', {
-                            paymentId: payment._id,
-                            paymentStageId: normalizedPaymentStageId,
-                            availableStages: Array.isArray(invoice.treatmentStages) 
-                              ? invoice.treatmentStages.map(s => {
-                                  const id = typeof s === 'object' && s !== null 
-                                    ? String((s as TreatmentStage)._id).trim().toLowerCase()
-                                    : String(s).trim().toLowerCase()
-                                  return { id, title: typeof s === 'object' ? (s as TreatmentStage).title : 'unknown' }
+                            let reason = ''
+                            if (changes.reason) {
+                              reason = String(changes.reason)
+                            } else if (changes.before && changes.after) {
+                              if (changes.before.amount !== changes.after.amount) {
+                                reason = `تغيير المبلغ من ${Number(changes.before.amount || 0).toLocaleString()} إلى ${Number(changes.after.amount || 0).toLocaleString()} ل.س`
+                              } else if (changes.before.method !== changes.after.method) {
+                                reason = `تغيير طريقة الدفع من ${String(changes.before.method)} إلى ${String(changes.after.method)}`
+                              } else {
+                                reason = 'تعديل بيانات الدفعة'
+                              }
+                            } else if (actionType === 'delete') {
+                              reason = 'تم حذف الدفعة'
+                            }
+
+                            const basePayment: Partial<Payment> | null =
+                              payment || (actionType === 'delete' && changes.before
+                                ? (changes.before as unknown as Partial<Payment>)
+                                : null)
+
+                            const receivedByName = (() => {
+                              if (basePayment?.receivedBy && typeof basePayment.receivedBy === 'object') {
+                                const receivedByObj = basePayment.receivedBy as { name?: string; email?: string }
+                                return receivedByObj.name || receivedByObj.email || 'غير معروف'
+                              }
+                              if (typeof basePayment?.receivedBy === 'string') {
+                                return basePayment.receivedBy
+                              }
+                              if (log.performedBy && typeof log.performedBy === 'object') {
+                                const performedByObj = log.performedBy as { name?: string; email?: string }
+                                return performedByObj.name || performedByObj.email || 'غير معروف'
+                              }
+                              if (typeof log.performedBy === 'string') {
+                                return log.performedBy
+                              }
+                              return 'غير معروف'
+                            })()
+
+                            let stageInfo = 'لجميع المراحل (دفعة قديمة)'
+                            const paymentStages =
+                              basePayment?.treatmentStages ||
+                              (Array.isArray(after.treatmentStages)
+                                ? after.treatmentStages
+                                : Array.isArray(before.treatmentStages)
+                                ? before.treatmentStages
+                                : [])
+
+                            if (paymentStages && paymentStages.length > 0) {
+                              const stageRef = paymentStages[0]
+                              const paymentStageId =
+                                typeof stageRef === 'object' && stageRef !== null
+                                  ? (stageRef as TreatmentStage)._id
+                                  : String(stageRef)
+                              const normalizedStageId = String(paymentStageId).trim().toLowerCase()
+
+                              let foundStage: TreatmentStage | null = null
+                              let foundService: AppointmentService | null = null
+
+                              for (const appointmentService of appointmentServices) {
+                                const serviceStages = stagesByService[appointmentService._id] || []
+                                const matchingStage = serviceStages.find((s) => {
+                                  const stageId = String(s._id).trim().toLowerCase()
+                                  return stageId === normalizedStageId
                                 })
-                              : []
-                          })
-                        }
-                        stageInfo = 'مرحلة غير معروفة'
-                      }
-                    }
 
-                          return (
-                            <tr key={payment._id} className='border-b hover:bg-gray-50 transition-colors'>
-                              <td className='px-4 py-3'>
-                                <Badge className={`${actionColor} border-0 flex items-center gap-1.5 w-fit`}>
-                                  {actionIcon}
-                                  {actionLabel}
-                                </Badge>
-                                {reason && (
-                                  <div className='text-xs text-gray-600 mt-1.5 pt-1.5 border-t'>
-                                    <span className='font-medium'>سبب التعديل:</span> {reason}
-                                  </div>
-                                )}
-                              </td>
-                              <td className='px-4 py-3 font-medium'>
-                                {payment.amount.toLocaleString()} ل.س
-                              </td>
-                              <td className='px-4 py-3'>{payment.method}</td>
-                              <td className='px-4 py-3'>
-                                <div className='flex flex-col gap-1'>
-                                  <span className='text-sm font-medium'>{stageInfo}</span>
-                                  {payment.notes && (
-                                    <span className='text-xs text-gray-500'>ملاحظات: {payment.notes}</span>
+                                if (matchingStage) {
+                                  foundStage = matchingStage
+                                  foundService = appointmentService
+                                  break
+                                }
+                              }
+
+                              if (!foundStage && Array.isArray(invoice?.treatmentStages)) {
+                                const stageObj = invoice?.treatmentStages.find((s) => {
+                                  const sId =
+                                    typeof s === 'object' && s !== null
+                                      ? String((s as TreatmentStage)._id).trim().toLowerCase()
+                                      : String(s).trim().toLowerCase()
+                                  return sId === normalizedStageId
+                                })
+
+                                if (stageObj && typeof stageObj === 'object') {
+                                  foundStage = stageObj as TreatmentStage
+                                  foundService =
+                                    appointmentServices.find((as) => {
+                                      const serviceStages = stagesByService[as._id] || []
+                                      return serviceStages.some((s) => {
+                                        const stageId = String(s._id).trim().toLowerCase()
+                                        return stageId === normalizedStageId
+                                      })
+                                    }) || null
+                                }
+                              }
+
+                              if (foundStage) {
+                                if (foundService) {
+                                  const service =
+                                    typeof foundService.service === 'object'
+                                      ? foundService.service
+                                      : null
+                                  stageInfo = `${service?.name || 'خدمة غير معروفة'} - ${foundStage.title}`
+                                } else {
+                                  stageInfo = foundStage.title
+                                }
+                              } else {
+                                stageInfo = 'مرحلة غير معروفة'
+                              }
+                            }
+
+                            return (
+                              <tr key={log._id} className='border-b hover:bg-gray-50 transition-colors'>
+                                <td className='px-4 py-3'>
+                                  <Badge className={`${actionColor} border-0 flex items-center gap-1.5 w-fit`}>
+                                    {actionIcon}
+                                    {actionLabel}
+                                  </Badge>
+                                  {reason && (
+                                    <div className='text-xs text-gray-600 mt-1.5 pt-1.5 border-t'>
+                                      <span className='font-medium'>سبب التعديل:</span> {reason}
+                                    </div>
                                   )}
-                                </div>
-                              </td>
-                              <td className='px-4 py-3'>
-                                {payment.date
-                                  ? new Date(payment.date).toLocaleDateString('ar-EG', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })
-                                  : payment.createdAt
-                                  ? new Date(payment.createdAt).toLocaleDateString('ar-EG', {
-                                      year: 'numeric',
-                                      month: 'long',
-                                      day: 'numeric',
-                                      hour: '2-digit',
-                                      minute: '2-digit',
-                                    })
-                                  : '-'}
-                              </td>
-                              <td className='px-4 py-3'>{receivedByName}</td>
-                            </tr>
-                          )
-                        })}
+                                </td>
+                                <td className='px-4 py-3 font-medium'>
+                                  {Number(amount || 0).toLocaleString()} ل.س
+                                </td>
+                                <td className='px-4 py-3'>{method}</td>
+                                <td className='px-4 py-3'>
+                                  <div className='flex flex-col gap-1'>
+                                    <span className='text-sm font-medium'>{stageInfo}</span>
+                                    {basePayment?.notes && (
+                                      <span className='text-xs text-gray-500'>ملاحظات: {basePayment.notes}</span>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className='px-4 py-3'>
+                                  {log.performedAt
+                                    ? new Date(log.performedAt).toLocaleDateString('ar-EG', {
+                                        year: 'numeric',
+                                        month: 'long',
+                                        day: 'numeric',
+                                        hour: '2-digit',
+                                        minute: '2-digit',
+                                      })
+                                    : '-'}
+                                </td>
+                                <td className='px-4 py-3'>{receivedByName}</td>
+                              </tr>
+                            )
+                          })}
                       </tbody>
                     </table>
                   </div>
@@ -1691,17 +1818,18 @@ function StagePaymentsDialog({
         queryKey: ['payment-activities']
       })
       
-      // Refetch invoices and payments first to ensure paymentIds is updated
-      if (refetchInvoices) {
-        await refetchInvoices()
-      }
-      
       setEditingPayment(null)
       setShowEditDialog(false)
       setShowConfirmDialog(false)
       setPendingUpdateData(null)
       setPredictedInvoice(null)
       setEditReason('')
+
+      onClose()
+
+      if (refetchInvoices) {
+        void refetchInvoices()
+      }
     } catch (error: unknown) {
       console.error('Error updating payment:', error)
       const axiosError = error as { response?: { data?: { message?: string; error?: string } }; message?: string }

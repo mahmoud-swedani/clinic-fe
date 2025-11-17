@@ -4,12 +4,18 @@ import axios from '@/lib/axios'
 import { queryKeys } from '@/lib/queryKeys'
 import { PaginatedResponse, Invoice, ApiResponse } from '@/types/api'
 import { usePagination } from './usePagination'
+import { setGlobalRateLimited, cleanupExpiredRateLimit } from '@/lib/rateLimit'
 
 export const useInvoices = () => {
   const { page, limit } = usePagination(10)
   const queryClient = useQueryClient()
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isRefetchingRef = useRef<boolean>(false)
+
+  useEffect(() => {
+    const cleanupInterval = setInterval(cleanupExpiredRateLimit, 1000)
+    return () => clearInterval(cleanupInterval)
+  }, [])
 
   const query = useQuery({
     queryKey: queryKeys.invoices.list({ page, limit }),
@@ -93,6 +99,11 @@ export const useInvoiceById = (id: string) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isRefetchingRef = useRef<boolean>(false)
 
+  useEffect(() => {
+    const cleanupInterval = setInterval(cleanupExpiredRateLimit, 1000)
+    return () => clearInterval(cleanupInterval)
+  }, [])
+
   const query = useQuery({
     queryKey: queryKeys.invoices.detail(id),
     queryFn: async () => {
@@ -106,6 +117,7 @@ export const useInvoiceById = (id: string) => {
       // Don't retry on 429 (rate limit) errors
       const axiosError = error as { response?: { status?: number } } | null
       if (axiosError?.response?.status === 429) {
+        setGlobalRateLimited()
         return false
       }
       return failureCount < 1
@@ -149,6 +161,7 @@ export const useInvoiceById = (id: string) => {
         const axiosError = error as { response?: { status?: number } }
         if (axiosError?.response?.status === 429) {
           console.warn('Rate limit hit for invoice polling, backing off')
+          setGlobalRateLimited()
           consecutiveErrors++
           baseInterval = Math.min(baseInterval * 2, 5 * 60 * 1000) // Max 5 minutes
           

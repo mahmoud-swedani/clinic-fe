@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react'
 import axios from '@/lib/axios'
 import { queryKeys } from '@/lib/queryKeys'
 import { ApiResponse, Payment } from '@/types/api'
+import { setGlobalRateLimited, cleanupExpiredRateLimit } from '@/lib/rateLimit'
 
 export const usePayments = () => {
   return useQuery({
@@ -21,6 +22,11 @@ export const usePaymentsByInvoice = (invoiceId: string) => {
   const intervalRef = useRef<NodeJS.Timeout | null>(null)
   const isRefetchingRef = useRef<boolean>(false)
 
+  useEffect(() => {
+    const cleanupInterval = setInterval(cleanupExpiredRateLimit, 1000)
+    return () => clearInterval(cleanupInterval)
+  }, [])
+
   const query = useQuery({
     queryKey: queryKeys.payments.byInvoice(invoiceId),
     queryFn: async () => {
@@ -36,6 +42,7 @@ export const usePaymentsByInvoice = (invoiceId: string) => {
       // Don't retry on 429 (rate limit) errors
       const axiosError = error as { response?: { status?: number } } | null
       if (axiosError?.response?.status === 429) {
+        setGlobalRateLimited()
         return false
       }
       return failureCount < 1
@@ -79,6 +86,7 @@ export const usePaymentsByInvoice = (invoiceId: string) => {
         const axiosError = error as { response?: { status?: number } }
         if (axiosError?.response?.status === 429) {
           console.warn('Rate limit hit for payments polling, backing off')
+          setGlobalRateLimited()
           consecutiveErrors++
           baseInterval = Math.min(baseInterval * 2, 5 * 60 * 1000) // Max 5 minutes
           
